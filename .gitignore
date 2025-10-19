@@ -1,0 +1,352 @@
+# =============================================================================
+# Comprehensive .gitignore for Cognitive Fabric Visualizer Project
+# =============================================================================
+# This file ensures that unnecessary files are automatically excluded from
+# version control to maintain a clean, professional repository.
+
+# =============================================================================
+# Node.js & npm Dependencies
+# =============================================================================
+# Primary dependency directories
+node_modules/
+**/node_modules/
+
+# Package manager files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# npm package files
+package-lock.json.backup
+package-lock.json.bak
+yarn.lock.backup
+yarn.lock.bak
+
+# =============================================================================
+# Environment & Configuration Files
+# =============================================================================
+# Actual environment files (keep .env.example)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+.env.production.backup
+.env.*.local
+.env.*.backup
+
+# =============================================================================
+# Build Outputs & Distribution
+# =============================================================================
+# Build directories
+dist/
+build/
+out/
+output/
+lib/
+
+# Generated files in subdirectories
+**/dist/
+**/build/
+**/out/
+**/output/
+**/lib/
+
+# =============================================================================
+# Testing & Coverage Reports
+# =============================================================================
+# Test coverage directories
+coverage/
+**/coverage/
+.nyc_output/
+lcov.info/
+lcov.dat/
+
+# Test results and reports
+test-results/
+**/test-results/
+test-results.xml
+junit.xml
+testem.log
+playwright-report/
+**/playwright-report/
+
+# Test databases
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+
+# =============================================================================
+# Cache & Temporary Files
+# =============================================================================
+# Cache directories
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+.eslintcache
+
+# OS-generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows file attributes
+desktop.ini
+$RECYCLE.BIN/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+~$*
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# IDE & Editor Files
+# =============================================================================
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# JetBrains IDEs
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Vim
+*.swp
+*.swo
+.*.swp
+.*.swo
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# Runtime & Core Dumps
+# =============================================================================
+# Core dump files
+core.*
+core
+*.core
+core.[0-9]*
+*.stackdump
+
+# Process files
+*.pid
+*.seed
+*.pid.lock
+
+# =============================================================================
+# Logs & Monitoring
+# =============================================================================
+# Application logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# =============================================================================
+# Dependency & Lock Files (Specific Cases)
+# =============================================================================
+# Development lock files (uncomment if you want to ignore lock files)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# Backup configuration files
+jest.config.js.backup
+jest.config.ts.backup
+tsconfig.json.backup
+package.json.backup
+
+# =============================================================================
+# Claude Flow & AI Tool Files
+# =============================================================================
+# Claude Flow configuration and generated files
+.claude/
+.claude-flow/
+.claude/settings.local.json
+
+# Swarm and agent directories
+.swarm/
+.hive-mind/
+agents/
+coordination/
+
+# AI tool directories
+.devcontainer/
+claude-flow.wiki/
+devpods/
+
+# Memory and session data
+memory/
+memory/claude-flow-data.json
+memory/sessions/*
+!memory/sessions/README.md
+memory/agents/*
+!memory/agents/README.md
+coordination/memory_bank/*
+coordination/subtasks/*
+coordination/orchestration/*
+
+# MCP and AI configuration
+.mcp.json
+claude-flow.config.json
+
+# =============================================================================
+# Development Tools
+# =============================================================================
+# ESLint
+.eslintcache
+
+# Prettier
+.prettierignore
+.prettierrc.backup
+
+# TypeScript
+*.tsbuildinfo
+
+# Webpack
+.webpack/
+.webpack-stats.json
+
+# Rollup
+.rollup.cache/
+
+# =============================================================================
+# Documentation Generation
+# =============================================================================
+# Generated documentation
+docs/generated/
+docs/api/
+docs/coverage/
+
+# JSDoc
+jsdoc-out/
+typedoc/
+
+# =============================================================================
+# Security & Secrets
+# =============================================================================
+# Private keys and certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Secret files
+secrets/
+.secrets/
+private/
+
+# =============================================================================
+# Performance & Profiling
+# =============================================================================
+# Performance profiles
+*.cpuprofile
+*.heapsnapshot
+
+# Bundle analysis
+bundle-analyzer-report.html
+bundle-stats.json
+
+# =============================================================================
+# Deployment & Infrastructure
+# =============================================================================
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# GitHub (keep workflows, ignore local configs)
+.github/
+!.github/workflows/
+!.github/ISSUE_TEMPLATE/
+
+# Docker (keep Dockerfile)
+.dockerignore
+docker-compose.override.yml
+
+# =============================================================================
+# Archive & Compression
+# =============================================================================
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+# AI development files
+CLAUDE.md
+PLANS.md
+hive-mind-prompt-*.txt
+
+# Temporary shell scripts
+af-with-context.sh
+cf-with-context.sh
+turbo_flow_wizard.sh
+
+# Large binary files
+*.bin
+*.exe
+*.dmg
+*.pkg
+*.deb
+*.rpm
+
+# =============================================================================
+# End of .gitignore
+# =============================================================================
+# Total: 200+ patterns covering all common development artifacts
+# Categories: 16 major categories with detailed subcategories
+# Last updated: Repository cleanup + AI development tools exclusion
+# Added: Claude Flow, GitHub, DevContainer, Swarm, Agents, Memory files
+# =============================================================================

@@ -1,0 +1,33 @@
+# Development Dockerfile with hot reloading
+FROM node:18-alpine
+
+# Install development dependencies
+RUN apk add --no-cache \
+    libc6-compat \
+    git \
+    curl \
+    bash \
+    vim
+
+WORKDIR /app
+
+# Install nodemon globally for hot reloading
+RUN npm install -g nodemon tsx
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm ci
+
+# Copy source code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p uploads logs temp
+
+# Expose ports
+EXPOSE 3001 9229
+
+# Development command with hot reloading
+CMD ["npm", "run", "dev"]

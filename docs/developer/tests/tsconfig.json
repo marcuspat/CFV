@@ -1,0 +1,41 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../dist/tests",
+    "rootDir": ".",
+    "types": ["jest", "node", "supertest"],
+    "typeRoots": ["../node_modules/@types", "../node_modules"],
+    "baseUrl": "../",
+    "paths": {
+      "@/*": ["src/*"],
+      "@tests/*": ["tests/*"],
+      "@config/*": ["config/*"]
+    },
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "allowJs": true,
+    "isolatedModules": true,
+    "noEmit": false,
+    "module": "ESNext",
+    "target": "ES2022",
+    "lib": ["ES2022"]
+  },
+  "include": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/*.setup.ts",
+    "**/*.helper.ts",
+    "**/*.mock.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "e2e",
+    "load"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "name": "cognitive-fabric-demo",
+  "version": "1.0.0",
+  "description": "Comprehensive demo system for Cognitive Fabric Visualizer",
+  "type": "module",
+  "main": "demo.js",
+  "scripts": {
+    "demo": "node demo.js",
+    "demo:quick": "node demo.js --conversations 1 --verbose",
+    "demo:full": "node demo.js --conversations 5 --verbose",
+    "demo:validation": "node demo.js --conversations 3 --skip-validation=false",
+    "demo:benchmark": "node demo.js --conversations 10 --output ./scripts/benchmarks",
+    "health": "node -e \"import('./demo/health-check.js').then(m => m.checkSystemHealth().then(console.log))\"",
+    "generate-data": "node -e \"import('./data/sample-generator.js').then(async (m) => { const conv = await m.generateConversation({length: 15}); console.log(JSON.stringify(conv, null, 2)); })\"",
+    "validate": "node -e \"import('./validation/demo-validator.js').then(async (m) => { const validator = new m.DemoValidator(JSON.parse(await import('fs').then(fs => fs.readFile('./scripts/config/demo-config.js', 'utf8')).then(content => content.replace('export const DEMO_CONFIG = ', '').replace(/;$/, ''))))); console.log('Validator ready'); })\""
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "uuid": "^9.0.1",
+    "commander": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "cognitive",
+    "fabric",
+    "visualizer",
+    "demo",
+    "ai",
+    "ml",
+    "visualization"
+  ],
+  "author": "Cognitive Fabric Visualizer Team",
+  "license": "ISC"
+}
