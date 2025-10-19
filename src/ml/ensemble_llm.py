@@ -28,6 +28,7 @@ class ModelProvider(Enum):
     """Available LLM providers"""
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
+    OPENROUTER = "openrouter"
     HUGGINGFACE = "huggingface"
     LOCAL = "local"
 
@@ -71,15 +72,29 @@ class EnsembleLLMCoordinator:
         self,
         openai_api_key: Optional[str] = None,
         anthropic_api_key: Optional[str] = None,
+        openrouter_api_key: Optional[str] = None,
         model_config: Optional[Dict] = None
     ):
         """Initialize ensemble coordinator with multiple providers."""
         self.openai_client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else None
         self.anthropic_client = anthropic.AsyncAnthropic(api_key=anthropic_api_key) if anthropic_api_key else None
+        self.openrouter_client = AsyncOpenAI(
+            api_key=openrouter_api_key,
+            base_url="https://openrouter.ai/api/v1"
+        ) if openrouter_api_key else None
 
         self.model_config = model_config or {
             "openai_models": ["gpt-4-turbo-preview", "gpt-3.5-turbo"],
             "anthropic_models": ["claude-3-opus-20240229", "claude-3-sonnet-20240229"],
+            "openrouter_models": [
+                "openai/gpt-4-turbo-preview",
+                "openai/gpt-3.5-turbo",
+                "anthropic/claude-3-opus-20240229",
+                "anthropic/claude-3-sonnet-20240229",
+                "meta-llama/llama-3.1-70b-instruct",
+                "meta-llama/llama-3.1-8b-instruct",
+                "mistralai/mistral-7b-instruct"
+            ],
             "local_models": []  # Add local model paths if available
         }
 
@@ -326,6 +341,60 @@ Format your response as JSON:
                 token_usage={}
             )
 
+    async def _call_openrouter_model(
+        self,
+        model: str,
+        prompt: str,
+        cognitive_dimension: str
+    ) -> LLMResponse:
+        """Call OpenRouter model with specialized prompt."""
+        start_time = time.time()
+
+        try:
+            response = await self.openrouter_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f"You are an expert cognitive analyst specializing in {cognitive_dimension.replace('_', ' ')}. Provide precise, analytical responses."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.1,  # Low temperature for consistency
+                max_tokens=1000
+            )
+
+            response_time = time.time() - start_time
+
+            return LLMResponse(
+                content=response.choices[0].message.content,
+                confidence=0.8,  # Default confidence, will be refined
+                reasoning="OpenRouter model analysis",
+                model_name=model,
+                provider=ModelProvider.OPENROUTER,
+                response_time=response_time,
+                token_usage={
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"OpenRouter API error for model {model}: {e}")
+            return LLMResponse(
+                content="",
+                confidence=0.0,
+                reasoning=f"API error: {str(e)}",
+                model_name=model,
+                provider=ModelProvider.OPENROUTER,
+                response_time=time.time() - start_time,
+                token_usage={}
+            )
+
     async def _call_local_model(
         self,
         model_path: str,
@@ -393,6 +462,8 @@ Format your response as JSON:
             return await self._call_openai_model(model_name, prompt, cognitive_dimension)
         elif provider == "anthropic" and self.anthropic_client:
             return await self._call_anthropic_model(model_name, prompt, cognitive_dimension)
+        elif provider == "openrouter" and self.openrouter_client:
+            return await self._call_openrouter_model(model_name, prompt, cognitive_dimension)
         elif provider == "local" and model_name in self.local_models:
             return await self._call_local_model(model_name, prompt, cognitive_dimension)
         else:
