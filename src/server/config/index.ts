@@ -41,6 +41,7 @@ const ConfigSchema = z.object({
   // API Keys
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
   RASA_WEBHOOK_URL: z.string().optional(),
 
   // File Upload Configuration
