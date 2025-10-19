@@ -152,12 +152,22 @@ class App {
 
   public async start(): Promise<void> {
     try {
-      // Initialize database connections
+      // Initialize database connections with graceful failure handling
       const { getDatabaseConfig } = await import('./config');
-      await database.initialize(getDatabaseConfig());
+      try {
+        await database.initialize(getDatabaseConfig());
+        logger.info('Database connections initialized successfully');
 
-      // Run database migrations
-      await database.runMigrations();
+        // Run database migrations
+        await database.runMigrations();
+        logger.info('Database migrations completed');
+      } catch (dbError) {
+        logger.warn('Database connections failed, continuing without databases', {
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+          code: (dbError as any)?.code || 'UNKNOWN'
+        });
+        // Continue without databases for development
+      }
 
       // Initialize WebSocket
       await this.initializeWebSocket();
@@ -168,6 +178,7 @@ class App {
           port: config.PORT,
           environment: config.NODE_ENV,
           processId: process.pid,
+          databaseStatus: 'Database connections: ' + (database.isConnected ? 'Connected' : 'Disconnected (graceful fallback)')
         });
       });
 

@@ -11,6 +11,9 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci && npm cache clean --force
 
+# Install tsx globally for TypeScript execution
+RUN npm install -g tsx
+
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
@@ -50,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
 # Start the application
-CMD ["node", "dist/server/index.js"]
+CMD ["tsx", "src/server/index.ts"]
