@@ -186,7 +186,7 @@ function CognitiveNodeComponent({
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <ringGeometry args={[node.radius * 1.2 * scale, node.radius * 1.3 * scale, 64]} />
         <meshBasicMaterial
-          color={node.confidence > 0.8 ? '#4CAF50' : node.confidence > 0.6 ? '#FFC107' : '#F44336'}
+          color={(node.confidence || 0) > 0.8 ? '#4CAF50' : (node.confidence || 0) > 0.6 ? '#FFC107' : '#F44336'}
           transparent
           opacity={0.6}
         />
@@ -279,6 +279,17 @@ function PerformanceMonitor({ onMetrics }: { onMetrics: (metrics: PerformanceMet
   return null;
 }
 
+// Scene effects component for fog and other global effects
+function SceneEffects() {
+  const { scene } = useThree();
+
+  useEffect(() => {
+    scene.fog = new THREE.Fog('#0a0a0a', 50, 200);
+  }, [scene]);
+
+  return null;
+}
+
 // Main visualization component
 export default function CognitiveVisualization3D({
   graph,
@@ -304,6 +315,9 @@ export default function CognitiveVisualization3D({
         dpr={[1, 2]} // Adaptive pixel ratio for performance
       >
         <PerformanceMonitor onMetrics={onPerformanceUpdate} />
+
+        {/* Scene setup component */}
+        <SceneEffects />
 
         {/* Lighting */}
         <ambientLight intensity={0.4} />
@@ -355,9 +369,7 @@ export default function CognitiveVisualization3D({
         {/* Background grid */}
         <gridHelper args={[100, 50, '#333333', '#222222']} />
 
-        {/* Fog for depth perception */}
-        <fog attach="fog" args={['#0a0a0a', 50, 200]} />
-      </Canvas>
+          </Canvas>
     </div>
   );
 }
