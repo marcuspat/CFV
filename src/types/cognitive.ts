@@ -248,6 +248,8 @@ export interface CognitivePerformanceMetrics {
   rougeScore?: number;
   confidence: number;
   consistency: number;
+  noveltyScore?: number;
+  selfAwareness?: number;
 }
 
 export interface TemporalMetrics {
@@ -263,11 +265,19 @@ export interface ConfidenceDistribution {
   low: number; // < 0.5
 }
 
+export interface VisualizationFilter {
+  dimension: string;
+  enabled: boolean;
+  confidenceRange?: [number, number];
+  timeRange?: [Date, Date];
+}
+
 export interface VisualizationData {
   id: string;
   type: VisualizationType;
   data: any;
   config: VisualizationConfig;
+  lastUpdated?: Date;
 }
 
 export enum VisualizationType {
@@ -285,13 +295,19 @@ export interface VisualizationConfig {
   animationEnabled: boolean;
   interactive: boolean;
   exportFormats: ExportFormat[];
+  layout?: 'force' | 'hierarchical' | 'circular' | 'grid';
+  nodeSize?: 'uniform' | 'weighted' | 'proportional';
+  edgeThickness?: 'uniform' | 'weighted';
+  filters?: VisualizationFilter[];
+  lastUpdated?: Date;
 }
 
 export enum ExportFormat {
   PNG = 'png',
   SVG = 'svg',
   JSON = 'json',
-  PDF = 'pdf'
+  PDF = 'pdf',
+  CSV = 'csv'
 }
 
 export interface ExplainabilityData {
@@ -345,12 +361,28 @@ export interface WebSocketMessage {
 }
 
 export enum MessageType {
+  // Connection management
+  CONNECTION_ESTABLISHED = 'connection_established',
+  SUBSCRIBE = 'subscribe',
+  UNSUBSCRIBE = 'unsubscribe',
+  PING = 'ping',
+  PONG = 'pong',
+  SUBSCRIPTION_CONFIRMED = 'subscription_confirmed',
+  UNSUBSCRIPTION_CONFIRMED = 'unsubscription_confirmed',
+
+  // Conversation updates
   CONVERSATION_UPDATE = 'conversation_update',
   COGNITIVE_ELEMENT_ADDED = 'cognitive_element_added',
+  COGNITIVE_ELEMENT_UPDATED = 'cognitive_element_updated',
   PROCESSING_PROGRESS = 'processing_progress',
   ANALYSIS_COMPLETE = 'analysis_complete',
-  ERROR = 'error',
-  VISUALIZATION_UPDATE = 'visualization_update'
+  ANALYSIS_PROGRESS = 'analysis_progress',
+
+  // Visualization updates
+  VISUALIZATION_UPDATE = 'visualization_update',
+
+  // Error handling
+  ERROR = 'error'
 }
 
 // Database Types

@@ -5,12 +5,12 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
-import { AuthenticatedRequest } from './auth';
+import { AuthenticatedRequest } from '../middleware/auth';
 import {
   ExportRequest,
-  ExportResponse,
-  ExportFormat
+  ExportResponse
 } from '../../types';
+import { ExportFormat } from '../../types/cognitive';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -41,7 +41,7 @@ router.post('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) =
     throw new ValidationError('Conversation ID is required');
   }
 
-  if (!Object.values(ExportFormat).includes(format)) {
+  if (!Object.values(ExportFormat).includes(format as ExportFormat)) {
     throw new ValidationError(`Invalid format. Supported formats: ${Object.values(ExportFormat).join(', ')}`);
   }
 
@@ -51,7 +51,7 @@ router.post('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) =
     id: exportId,
     conversationId,
     userId: user.id,
-    format,
+    format: format as ExportFormat,
     status: 'pending',
     createdAt: new Date(),
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days

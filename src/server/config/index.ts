@@ -4,7 +4,7 @@
 
 import dotenv from 'dotenv';
 import { z } from 'zod';
-import { DatabaseConfiguration } from '../types';
+import { DatabaseConfiguration } from '../../types';
 
 // Load environment variables
 dotenv.config();
@@ -12,12 +12,12 @@ dotenv.config();
 // Configuration Schema
 const ConfigSchema = z.object({
   // Server Configuration
-  PORT: z.string().transform(Number).default('3001'),
+  PORT: z.preprocess((val) => Number(val), z.number().default(3001)),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
   // Database Configuration
   DB_HOST: z.string().default('localhost'),
-  DB_PORT: z.string().transform(Number).default('5432'),
+  DB_PORT: z.preprocess((val) => Number(val), z.number().default(5432)),
   DB_NAME: z.string().default('cognitive_fabric'),
   DB_USER: z.string().default('postgres'),
   DB_PASSWORD: z.string().default('password'),
@@ -31,7 +31,7 @@ const ConfigSchema = z.object({
   // Redis Configuration
   REDIS_URL: z.string().default('redis://localhost:6379'),
   REDIS_KEY_PREFIX: z.string().default('cfv:'),
-  REDIS_TTL: z.string().transform(Number).default('3600'),
+  REDIS_TTL: z.preprocess((val) => Number(val), z.number().default(3600)),
 
   // JWT Configuration
   JWT_SECRET: z.string().min(32, 'JWT secret must be at least 32 characters'),
@@ -44,25 +44,25 @@ const ConfigSchema = z.object({
   RASA_WEBHOOK_URL: z.string().optional(),
 
   // File Upload Configuration
-  MAX_FILE_SIZE: z.string().transform(Number).default('52428800'), // 50MB
+  MAX_FILE_SIZE: z.preprocess((val) => Number(val), z.number().default(52428800)), // 50MB
   UPLOAD_DIR: z.string().default('uploads'),
 
   // Performance Configuration
-  WEBSOCKET_HEARTBEAT: z.string().transform(Number).default('30000'),
-  MAX_CONCURRENT_CONNECTIONS: z.string().transform(Number).default('100'),
-  MAX_CONCURRENT_ANALYSES: z.string().transform(Number).default('10'),
+  WEBSOCKET_HEARTBEAT: z.preprocess((val) => Number(val), z.number().default(30000)),
+  MAX_CONCURRENT_CONNECTIONS: z.preprocess((val) => Number(val), z.number().default(100)),
+  MAX_CONCURRENT_ANALYSES: z.preprocess((val) => Number(val), z.number().default(10)),
 
   // Cognitive Processing Configuration
-  COGNITIVE_PROCESSING_TIMEOUT: z.string().transform(Number).default('300000'), // 5 minutes
+  COGNITIVE_PROCESSING_TIMEOUT: z.preprocess((val) => Number(val), z.number().default(300000)), // 5 minutes
   ML_SERVICE_URL: z.string().optional(),
 
   // Verification Threshold
-  VERIFICATION_THRESHOLD: z.string().transform(Number).default('0.95'),
+  VERIFICATION_THRESHOLD: z.preprocess((val) => Number(val), z.number().default(0.95)),
 
   // Security Configuration
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
-  RATE_LIMIT_WINDOW_MS: z.string().transform(Number).default('900000'), // 15 minutes
-  RATE_LIMIT_MAX_REQUESTS: z.string().transform(Number).default('100'),
+  RATE_LIMIT_WINDOW_MS: z.preprocess((val) => Number(val), z.number().default(900000)), // 15 minutes
+  RATE_LIMIT_MAX_REQUESTS: z.preprocess((val) => Number(val), z.number().default(100)),
 
   // Logging Configuration
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
@@ -98,7 +98,6 @@ export function getDatabaseConfig(): DatabaseConfiguration {
     redis: {
       url: config.REDIS_URL,
       keyPrefix: config.REDIS_KEY_PREFIX,
-      ttl: config.REDIS_TTL,
     },
   };
 }

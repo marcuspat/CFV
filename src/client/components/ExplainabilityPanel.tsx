@@ -401,11 +401,10 @@ const ExplainabilityPanel: React.FC<ExplainabilityPanelProps> = ({
                 <div className="space-y-2">
                   <span className="text-sm">Confidence Threshold</span>
                   <Slider
-                    value={confidenceThreshold}
-                    onValueChange={setConfidenceThreshold}
+                    value={confidenceThreshold[0]}
+                    onChange={(value) => setConfidenceThreshold([value])}
                     max={1}
                     min={0}
-                    step={0.05}
                     className="w-full"
                   />
                   <span className="text-xs text-muted-foreground">
@@ -546,7 +545,7 @@ const ExplainabilityPanel: React.FC<ExplainabilityPanelProps> = ({
                 <Textarea
                   placeholder="Ask a question about this cognitive element..."
                   value={interactiveQuery}
-                  onChange={(e) => setInteractiveQuery(e.target.value)}
+                  onChange={setInteractiveQuery}
                   className="flex-1"
                   rows={3}
                 />
@@ -664,7 +663,7 @@ const ExplainabilityPanel: React.FC<ExplainabilityPanelProps> = ({
                 <Textarea
                   placeholder="Share any additional feedback or suggestions..."
                   value={userFeedback.comments}
-                  onChange={(e) => setUserFeedback(prev => ({...prev, comments: e.target.value}))}
+                  onChange={(value) => setUserFeedback(prev => ({...prev, comments: value}))}
                   rows={3}
                 />
               </div>

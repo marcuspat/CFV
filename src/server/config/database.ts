@@ -6,7 +6,7 @@
 import { Pool, PoolConfig } from 'pg';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import { createClient, RedisClientType } from 'redis';
-import { DatabaseConfiguration } from '../types';
+import { DatabaseConfiguration } from '../../types';
 
 class DatabaseManager {
   private postgresPool?: Pool;
@@ -88,12 +88,8 @@ class DatabaseManager {
       url: config.url,
     });
 
-    if (config.keyPrefix) {
-      this.redisClient.options = {
-        ...this.redisClient.options,
-        keyPrefix: config.keyPrefix,
-      };
-    }
+    // Redis client options are set on creation
+    // Key prefix will be handled in Redis operations
 
     this.redisClient.on('error', (error) => {
       console.error('Redis Client Error:', error);
@@ -340,7 +336,7 @@ class DatabaseManager {
         await this.runCypherQuery(migration);
       } catch (error) {
         // Ignore constraint/index already exists errors
-        if (!error.message.includes('already exists')) {
+        if (!(error instanceof Error) || !error.message.includes('already exists')) {
           throw error;
         }
       }

@@ -4,7 +4,7 @@
  */
 
 import React, { useRef, useMemo, useEffect, useState, useCallback } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, RootState } from '@react-three/fiber';
 import { OrbitControls, Text, Line, Sphere } from '@react-three/drei';
 import * as THREE from 'three';
 import { CognitiveGraph, CognitiveNode, CognitiveEdge, VisualizationState, PerformanceMetrics } from '../types/cognitive';
@@ -32,7 +32,8 @@ function useForceSimulation(nodes: CognitiveNode[], edges: CognitiveEdge[]) {
   });
 
   useFrame((state, delta) => {
-    if (!state.isPlaying) return;
+    // Always run the simulation for now
+    // if (state.paused) return;
 
     const newNodes = [...simulationNodes];
     const { forces, damping, timeStep } = simulationRef.current;
@@ -156,7 +157,7 @@ function CognitiveNodeComponent({
     }
   });
 
-  const handleClick = useCallback((event: THREE.Event) => {
+  const handleClick = useCallback((event: any) => {
     event.stopPropagation();
     onClick();
   }, [onClick]);
@@ -218,7 +219,7 @@ function CognitiveEdgeComponent({
   targetNode: CognitiveNode;
   isAnimated: boolean;
 }) {
-  const lineRef = useRef<THREE.Line>(null);
+  const lineRef = useRef<any>(null);
   const [offset, setOffset] = useState(0);
 
   useFrame((state) => {

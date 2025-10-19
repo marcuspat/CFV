@@ -5,7 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
-import { AuthenticatedRequest } from './auth';
+import { AuthenticatedRequest } from '../middleware/auth';
 import {
   VisualizationData,
   VisualizationType,
@@ -59,7 +59,7 @@ router.get('/:conversationId', asyncHandler(async (req: AuthenticatedRequest, re
 
   // Generate new visualization if not found
   if (!storedViz) {
-    const vizData = generateMockVisualization(conversationId, visualizationType, {
+    const vizData = generateMockVisualization(conversationId, visualizationType as VisualizationType, {
       width: Number(width),
       height: Number(height),
       colorScheme,
@@ -72,7 +72,7 @@ router.get('/:conversationId', asyncHandler(async (req: AuthenticatedRequest, re
       id: uuidv4(),
       conversationId,
       userId: user.id,
-      type: visualizationType,
+      type: visualizationType as VisualizationType,
       data: vizData,
       config: {
         width: Number(width),

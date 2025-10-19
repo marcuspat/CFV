@@ -21,7 +21,14 @@ export type {
   HealthCheckResponse,
   CreateConversationRequest,
   CreateConversationResponse,
-  GetConversationResponse
+  GetConversationResponse,
+  ListConversationsResponse,
+  StartAnalysisRequest,
+  StartAnalysisResponse,
+  GetAnalysisStatusResponse,
+  GetAnalysisResultResponse,
+  ExportRequest,
+  ExportResponse
 } from './api';
 
 // Database configuration types

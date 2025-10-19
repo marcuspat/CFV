@@ -44,7 +44,7 @@ class App {
 
     // Security middleware
     if (serverConfig.helmet) {
-      this.app.use(helmet(serverConfig.helmet));
+      this.app.use(helmet(serverConfig.helmet as any));
     }
 
     // CORS configuration
@@ -153,7 +153,8 @@ class App {
   public async start(): Promise<void> {
     try {
       // Initialize database connections
-      await database.initialize(database.getDatabaseConfig());
+      const { getDatabaseConfig } = await import('./config');
+      await database.initialize(getDatabaseConfig());
 
       // Run database migrations
       await database.runMigrations();

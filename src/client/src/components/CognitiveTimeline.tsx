@@ -221,8 +221,7 @@ export default function CognitiveTimeline({
 
       // Find closest data point
       const bisect = d3.bisector((d: TemporalMetrics) => d.timestamp.getTime()).left;
-      const timestamps = metrics.temporalEvolution.map(d => d.timestamp.getTime());
-      const index = bisect(timestamps, time.getTime());
+      const index = bisect(metrics.temporalEvolution, time.getTime());
       const data = metrics.temporalEvolution[Math.max(0, Math.min(index - 1, metrics.temporalEvolution.length - 1))];
 
       if (data) {
@@ -258,7 +257,7 @@ export default function CognitiveTimeline({
       .attr('class', 'x-axis')
       .attr('transform', `translate(0,${dimensions.height})`)
       .call(d3.axisBottom(scales.xScale)
-        .tickFormat(d3.timeFormat('%H:%M:%S'))
+        .tickFormat((d: any) => d3.timeFormat('%H:%M:%S')(d))
         .ticks(10))
       .selectAll('text')
       .style('fill', '#cccccc')

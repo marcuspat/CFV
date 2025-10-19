@@ -5,7 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { asyncHandler, ValidationError, NotFoundError, CognitiveProcessingError } from '../middleware/errorHandler';
-import { AuthenticatedRequest } from './auth';
+import { AuthenticatedRequest } from '../middleware/auth';
 import {
   CognitiveAnalysisResult,
   StartAnalysisRequest,

@@ -8,6 +8,8 @@ import {
   Conversation,
   CognitiveAnalysisResult,
   ProcessingStatus,
+} from '../types/cognitive';
+import {
   CreateConversationRequest,
   CreateConversationResponse,
   GetConversationResponse,
@@ -18,7 +20,7 @@ import {
   GetAnalysisResultResponse,
   ExportRequest,
   ExportResponse,
-} from '../types/cognitive';
+} from '../../../types';
 
 class ApiService {
   private client: AxiosInstance;

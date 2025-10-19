@@ -9,7 +9,8 @@ import {
   VisualizationData,
   WebSocketMessage,
   Conversation,
-  ProcessingStatus
+  ProcessingStatus,
+  VisualizationFilter
 } from './cognitive';
 
 // HTTP API Endpoints Types
@@ -100,6 +101,10 @@ export interface ProcessingMetrics {
 export interface GetVisualizationRequest {
   conversationId: string;
   visualizationType: string;
+  width?: number;
+  height?: number;
+  colorScheme?: string;
+  animationEnabled?: boolean;
   options?: {
     width?: number;
     height?: number;
@@ -126,12 +131,7 @@ export interface UpdateVisualizationRequest {
   };
 }
 
-export interface VisualizationFilter {
-  dimension: string;
-  enabled: boolean;
-  confidenceRange?: [number, number];
-  timeRange?: [Date, Date];
-}
+// VisualizationFilter is imported from cognitive.ts
 
 // Export API
 export interface ExportRequest {
@@ -154,7 +154,7 @@ export interface ExportResponse {
 }
 
 // Real-time WebSocket Events
-export interface CognitiveElementEvent extends Omit<WebSocketMessage, 'type'> {
+export interface CognitiveElementEvent {
   type: 'cognitive_element_added' | 'cognitive_element_updated';
   data: {
     elementId: string;
@@ -162,9 +162,11 @@ export interface CognitiveElementEvent extends Omit<WebSocketMessage, 'type'> {
     confidence: number;
     dimension: string;
   };
+  timestamp: Date;
+  conversationId?: string;
 }
 
-export interface ProcessingProgressEvent extends Omit<WebSocketMessage, 'type'> {
+export interface ProcessingProgressEvent {
   type: 'processing_progress';
   data: {
     progress: number; // 0-100
@@ -172,18 +174,22 @@ export interface ProcessingProgressEvent extends Omit<WebSocketMessage, 'type'> 
     totalSteps: number;
     estimatedTimeRemaining: number;
   };
+  timestamp: Date;
+  conversationId?: string;
 }
 
-export interface VisualizationUpdateEvent extends Omit<WebSocketMessage, 'type'> {
+export interface VisualizationUpdateEvent {
   type: 'visualization_update';
   data: {
     visualizationId: string;
     updateType: 'node_added' | 'node_removed' | 'edge_added' | 'edge_removed' | 'layout_updated';
     changes: any;
   };
+  timestamp: Date;
+  conversationId?: string;
 }
 
-export interface ErrorEvent extends Omit<WebSocketMessage, 'type'> {
+export interface ErrorEvent {
   type: 'error';
   data: {
     code: string;
@@ -191,6 +197,8 @@ export interface ErrorEvent extends Omit<WebSocketMessage, 'type'> {
     details?: any;
     timestamp: Date;
   };
+  timestamp: Date;
+  conversationId?: string;
 }
 
 // Authentication & User Management
@@ -233,6 +241,9 @@ export interface NotificationSettings {
 export interface AuthRequest {
   email: string;
   password: string;
+  username?: string;
+  fullName?: string;
+  role?: UserRole;
 }
 
 export interface AuthResponse {

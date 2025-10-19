@@ -318,31 +318,31 @@ export class WebSocketService {
     this.broadcastToConversation(conversationId, message);
   }
 
-  private broadcastToConversation(conversationId: string, message: WebSocketMessage): void {
+  private broadcastToConversation(conversationId: string, message: WebSocketMessage | CognitiveElementEvent | ProcessingProgressEvent | VisualizationUpdateEvent | ErrorEvent): void {
     this.clients.forEach((subscription, ws) => {
       if (subscription.conversationId === conversationId) {
-        this.sendToClient(ws, message);
+        this.sendToClient(ws, message as WebSocketMessage);
       }
     });
   }
 
-  private broadcastToAnalysis(analysisId: string, message: WebSocketMessage): void {
+  private broadcastToAnalysis(analysisId: string, message: WebSocketMessage | CognitiveElementEvent | ProcessingProgressEvent | VisualizationUpdateEvent | ErrorEvent): void {
     this.clients.forEach((subscription, ws) => {
       if (subscription.analysisId === analysisId) {
-        this.sendToClient(ws, message);
+        this.sendToClient(ws, message as WebSocketMessage);
       }
     });
   }
 
-  private broadcastToVisualization(visualizationId: string, message: WebSocketMessage): void {
+  private broadcastToVisualization(visualizationId: string, message: WebSocketMessage | CognitiveElementEvent | ProcessingProgressEvent | VisualizationUpdateEvent | ErrorEvent): void {
     this.clients.forEach((subscription, ws) => {
       if (subscription.visualizationId === visualizationId) {
-        this.sendToClient(ws, message);
+        this.sendToClient(ws, message as WebSocketMessage);
       }
     });
   }
 
-  private sendToClient(ws: AuthenticatedWebSocket, message: WebSocketMessage): void {
+  private sendToClient(ws: AuthenticatedWebSocket, message: WebSocketMessage | CognitiveElementEvent | ProcessingProgressEvent | VisualizationUpdateEvent | ErrorEvent): void {
     if (ws.readyState === WebSocket.OPEN) {
       try {
         ws.send(JSON.stringify(message));

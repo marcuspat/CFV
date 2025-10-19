@@ -8,15 +8,15 @@ dotenv.config();
 const environmentSchema = z.object({
   // Node environment
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().transform(Number).default('3001'),
+  PORT: z.preprocess((val) => Number(val), z.number().default(3001)),
 
   // Database Configuration
   DB_HOST: z.string().min(1, 'Database host is required'),
-  DB_PORT: z.string().transform(Number).default('5432'),
+  DB_PORT: z.preprocess((val) => Number(val), z.number().default(5432)),
   DB_NAME: z.string().min(1, 'Database name is required'),
   DB_USER: z.string().min(1, 'Database user is required'),
   DB_PASSWORD: z.string().min(1, 'Database password is required'),
-  DB_SSL: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
+  DB_SSL: z.enum(['true', 'false']).transform(val => val === 'true').default(false),
 
   // Neo4j Configuration
   NEO4J_URI: z.string().url('Invalid Neo4j URI'),
@@ -37,48 +37,50 @@ const environmentSchema = z.object({
   RASA_WEBHOOK_URL: z.string().url().optional(),
 
   // File Upload Configuration
-  MAX_FILE_SIZE: z.string().transform((val) => {
-    const match = val.match(/^(\d+)(MB|GB|KB)?$/i);
+  MAX_FILE_SIZE: z.preprocess((val) => {
+    if (typeof val === 'number') return val;
+    const match = String(val).match(/^(\d+)(MB|GB|KB)?$/i);
     if (!match) return 50 * 1024 * 1024; // Default 50MB
     const [, size, unit = 'MB'] = match;
     const multiplier = unit.toUpperCase() === 'GB' ? 1024 * 1024 * 1024 :
                       unit.toUpperCase() === 'KB' ? 1024 : 1024 * 1024;
     return parseInt(size) * multiplier;
-  }).default('50MB'),
+  }, z.number().default(50 * 1024 * 1024)),
 
   UPLOAD_DIR: z.string().default('uploads'),
 
   // Performance Configuration
-  WEBSOCKET_HEARTBEAT: z.string().transform(Number).default('30000'),
-  MAX_CONCURRENT_CONNECTIONS: z.string().transform(Number).default('100'),
-  COGNITIVE_PROCESSING_TIMEOUT: z.string().transform(Number).default('30000'),
+  WEBSOCKET_HEARTBEAT: z.preprocess((val) => Number(val), z.number().default(30000)),
+  MAX_CONCURRENT_CONNECTIONS: z.preprocess((val) => Number(val), z.number().default(100)),
+  COGNITIVE_PROCESSING_TIMEOUT: z.preprocess((val) => Number(val), z.number().default(30000)),
 
   // ML Service Configuration
   ML_SERVICE_URL: z.string().url().optional(),
-  ML_SERVICE_TIMEOUT: z.string().transform(Number).default('60000'),
+  ML_SERVICE_TIMEOUT: z.preprocess((val) => Number(val), z.number().default(60000)),
 
   // Verification Configuration
-  VERIFICATION_THRESHOLD: z.string().transform(Number).refine(
-    (val) => val >= 0 && val <= 1,
-    'Verification threshold must be between 0 and 1'
-  ).default('0.95'),
+  VERIFICATION_THRESHOLD: z.preprocess((val) => {
+    const num = Number(val);
+    if (num >= 0 && num <= 1) return num;
+    throw new Error('Verification threshold must be between 0 and 1');
+  }, z.number().default(0.95)),
 
   // Security Configuration
   CORS_ORIGIN: z.string().optional(),
-  RATE_LIMIT_WINDOW_MS: z.string().transform(Number).default('900000'), // 15 minutes
-  RATE_LIMIT_MAX_REQUESTS: z.string().transform(Number).default('100'),
+  RATE_LIMIT_WINDOW_MS: z.preprocess((val) => Number(val), z.number().default(900000)), // 15 minutes
+  RATE_LIMIT_MAX_REQUESTS: z.preprocess((val) => Number(val), z.number().default(100)),
 
   // Logging Configuration
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
   LOG_FILE: z.string().optional(),
 
   // Analytics Configuration
-  ENABLE_ANALYTICS: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
+  ENABLE_ANALYTICS: z.enum(['true', 'false']).transform(val => val === 'true').default(false),
   ANALYTICS_API_KEY: z.string().optional(),
 
   // Development Configuration
-  ENABLE_MOCK_SERVICES: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
-  ENABLE_DEBUG_ROUTES: z.enum(['true', 'false']).transform(val => val === 'true').default('false')
+  ENABLE_MOCK_SERVICES: z.enum(['true', 'false']).transform(val => val === 'true').default(false),
+  ENABLE_DEBUG_ROUTES: z.enum(['true', 'false']).transform(val => val === 'true').default(false)
 });
 
 // Type for validated environment
@@ -92,7 +94,7 @@ function validateEnvironment(): Environment {
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('❌ Environment validation failed:');
-      error.errors.forEach(err => {
+      error.issues.forEach(err => {
         console.error(`  - ${err.path.join('.')}: ${err.message}`);
       });
 

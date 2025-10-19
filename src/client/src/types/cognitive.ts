@@ -36,6 +36,7 @@ export interface CognitiveNode {
   element: CognitiveElement;
   color: string;
   opacity: number;
+  confidence?: number;
 }
 
 export interface CognitiveGraph {
