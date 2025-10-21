@@ -1,99 +1,81 @@
 # =============================================================================
-# Comprehensive .gitignore for Cognitive Fabric Visualizer Project
+# COMPREHENSIVE GITIGNORE FOR COGNITIVE FABRIC VISUALIZER
 # =============================================================================
-# This file ensures that unnecessary files are automatically excluded from
-# version control to maintain a clean, professional repository.
+# Created by: Agentic Swarm Cleanup Team
+# Date: October 20, 2025
+# Purpose: Comprehensive exclusion of unnecessary files from version control
+# =============================================================================
 
 # =============================================================================
-# Node.js & npm Dependencies
+# DEPENDENCIES AND PACKAGE MANAGEMENT
 # =============================================================================
-# Primary dependency directories
 node_modules/
 **/node_modules/
-
-# Package manager files
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-# npm package files
-package-lock.json.backup
-package-lock.json.bak
-yarn.lock.backup
-yarn.lock.bak
+.npm
+.eslintcache
 
 # =============================================================================
-# Environment & Configuration Files
+# ENVIRONMENT VARIABLES AND CONFIGURATION
 # =============================================================================
-# Actual environment files (keep .env.example)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-.env.production
-.env.production.backup
 .env.*.local
 .env.*.backup
+.env.example
 
 # =============================================================================
-# Build Outputs & Distribution
+# BUILD OUTPUTS AND DISTRIBUTION
 # =============================================================================
-# Build directories
 dist/
 build/
 out/
-output/
-lib/
-
-# Generated files in subdirectories
-**/dist/
-**/build/
-**/out/
-**/output/
-**/lib/
+.next/
+.nuxt/
+.parcel-cache/
+.vercel/
+.netlify/
 
 # =============================================================================
-# Testing & Coverage Reports
+# CACHE AND TEMPORARY FILES
 # =============================================================================
-# Test coverage directories
-coverage/
-**/coverage/
-.nyc_output/
-lcov.info/
-lcov.dat/
-
-# Test results and reports
-test-results/
-**/test-results/
-test-results.xml
-junit.xml
-testem.log
-playwright-report/
-**/playwright-report/
-
-# Test databases
-*.db
-*.db-journal
-*.db-wal
-*.sqlite
-*.sqlite-journal
-*.sqlite-wal
-
-# =============================================================================
-# Cache & Temporary Files
-# =============================================================================
-# Cache directories
 .cache/
 .parcel-cache/
-.eslintcache
-.stylelintcache
-*.tsbuildinfo
-.eslintcache
+.tmp/
+temp/
+tmp/
+*.tmp
+*.temp
+*.log
+*.swp
+*.swo
+*~
 
-# OS-generated files
+# =============================================================================
+# IDE AND EDITOR CONFIGURATIONS
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# =============================================================================
+# OPERATING SYSTEM GENERATED FILES
+# =============================================================================
 .DS_Store
 .DS_Store?
 ._*
@@ -101,252 +83,193 @@ playwright-report/
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-# Windows file attributes
 desktop.ini
 $RECYCLE.BIN/
-
-# Temporary files
-*.tmp
-*.temp
-*.log
-*.bak
-*.backup
-*.old
-*.orig
-*.rej
-~$*
-*.swp
-*.swo
-*~
+*.lnk
 
 # =============================================================================
-# IDE & Editor Files
+# LOGS AND RUNTIME DATA
 # =============================================================================
-# VS Code
-.vscode/
-!.vscode/extensions.json
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-
-# JetBrains IDEs
-.idea/
-*.iws
-*.iml
-*.ipr
-
-# Vim
-*.swp
-*.swo
-.*.swp
-.*.swo
-
-# Emacs
-*~
-\#*\#
-/.emacs.desktop
-/.emacs.desktop.lock
-*.elc
-auto-save-list
-tramp
-.\#*
-
-# Sublime Text
-*.sublime-project
-*.sublime-workspace
-
-# =============================================================================
-# Runtime & Core Dumps
-# =============================================================================
-# Core dump files
-core.*
-core
-*.core
-core.[0-9]*
-*.stackdump
-
-# Process files
-*.pid
-*.seed
-*.pid.lock
-
-# =============================================================================
-# Logs & Monitoring
-# =============================================================================
-# Application logs
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 lerna-debug.log*
-
-# Runtime data
 pids/
 *.pid
 *.seed
 *.pid.lock
 
 # =============================================================================
-# Dependency & Lock Files (Specific Cases)
+# TESTING AND COVERAGE
 # =============================================================================
-# Development lock files (uncomment if you want to ignore lock files)
-# package-lock.json
-# yarn.lock
-# pnpm-lock.yaml
-
-# Backup configuration files
-jest.config.js.backup
-jest.config.ts.backup
-tsconfig.json.backup
-package.json.backup
+coverage/
+*.lcov
+.nyc_output/
+.jest/
+test-results/
+playwright-report/
+test-results.xml
 
 # =============================================================================
-# Claude Flow & AI Tool Files
+# DATABASE AND STORAGE
 # =============================================================================
-# Claude Flow configuration and generated files
+database/
+uploads/
+*.db
+*.sqlite
+*.sqlite3
+
+# =============================================================================
+# CLAUDE-SPECIFIC DIRECTORIES AND FILES
+# =============================================================================
 .claude/
 .claude-flow/
-.claude/settings.local.json
-
-# Swarm and agent directories
-.swarm/
-.hive-mind/
-agents/
-coordination/
-
-# AI tool directories
+.claude-temp/
 .devcontainer/
+.github/
+.hive-mind/
+.swarm/
+agents/
 claude-flow.wiki/
+coordination/
 devpods/
-
-# Memory and session data
 memory/
-memory/claude-flow-data.json
-memory/sessions/*
-!memory/sessions/README.md
-memory/agents/*
-!memory/agents/README.md
-coordination/memory_bank/*
-coordination/subtasks/*
-coordination/orchestration/*
-
-# MCP and AI configuration
-.mcp.json
-claude-flow.config.json
+swarm-coordination/
+.claude-code/
+claude-flow
 
 # =============================================================================
-# Development Tools
+# PYTHON AND ML FILES
 # =============================================================================
-# ESLint
-.eslintcache
-
-# Prettier
-.prettierignore
-.prettierrc.backup
-
-# TypeScript
-*.tsbuildinfo
-
-# Webpack
-.webpack/
-.webpack-stats.json
-
-# Rollup
-.rollup.cache/
-
-# =============================================================================
-# Documentation Generation
-# =============================================================================
-# Generated documentation
-docs/generated/
-docs/api/
-docs/coverage/
-
-# JSDoc
-jsdoc-out/
-typedoc/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+pyvenv.cfg
+.pytest_cache/
+.coverage
+htmlcov/
 
 # =============================================================================
-# Security & Secrets
+# BACKUP AND TEMPORARY FILES
 # =============================================================================
-# Private keys and certificates
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+~*
+.~*
+#*#
+.*.swp
+.*.swo
+
+# =============================================================================
+# DOCKER AND CONTAINER FILES
+# =============================================================================
+.dockerignore
+docker-compose.override.yml
+.docker/
+
+# =============================================================================
+# PERFORMANCE AND MONITORING
+# =============================================================================
+performance-results/
+benchmark-results/
+.monitoring/
+.metrics/
+
+# =============================================================================
+# MCP AND COORDINATION ARTIFACTS
+# =============================================================================
+.mcp-cache/
+mcp-cache/
+coordination-cache/
+swarm-data/
+agent-data/
+
+# =============================================================================
+# SECURITY AND SENSITIVE FILES
+# =============================================================================
 *.pem
 *.key
 *.crt
 *.p12
 *.pfx
-
-# Secret files
-secrets/
-.secrets/
-private/
+id_rsa
+id_rsa.pub
+known_hosts
 
 # =============================================================================
-# Performance & Profiling
+# DOCUMENTATION BUILD ARTIFACTS
 # =============================================================================
-# Performance profiles
-*.cpuprofile
-*.heapsnapshot
-
-# Bundle analysis
-bundle-analyzer-report.html
-bundle-stats.json
+docs/build/
+docs/_build/
+site/
+*.d.ts.map
+*.js.map
 
 # =============================================================================
-# Deployment & Infrastructure
+# MISCELLANEOUS DEVELOPMENT FILES
 # =============================================================================
-# Terraform
-*.tfstate
-*.tfstate.*
-.terraform/
-.terraform.lock.hcl
-
-# GitHub (keep workflows, ignore local configs)
-.github/
-!.github/workflows/
-!.github/ISSUE_TEMPLATE/
-
-# Docker (keep Dockerfile)
-.dockerignore
-docker-compose.override.yml
+.eslintcache
+.stylelintcache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
 
 # =============================================================================
-# Archive & Compression
+# ARCHIVE AND OLD FILES
 # =============================================================================
-# Archive files
-*.zip
-*.tar.gz
-*.rar
-*.7z
+archive/
+old/
+backup/
+*.archive
+*.old
 
 # =============================================================================
-# Project Specific
+# SPECIFIC TO THIS PROJECT - CLEANUP TARGETS
 # =============================================================================
-# AI development files
-CLAUDE.md
-PLANS.md
-hive-mind-prompt-*.txt
-
-# Temporary shell scripts
+STARTUP_VERIFICATION.md
+STARTUP_VERIFICATION_UPDATED.md
+OPENROUTER_SETUP.md
+boot.sh
 af-with-context.sh
 cf-with-context.sh
-turbo_flow_wizard.sh
-
-# Large binary files
-*.bin
-*.exe
-*.dmg
-*.pkg
-*.deb
-*.rpm
+claude-flow
+api-test-results.md
+ml_validation_report.json
+REPOSITORY_CLEANUP_AUDIT_REPORT.md
+CLAUDE.md.OLD
+tsconfig.performance.json
 
 # =============================================================================
-# End of .gitignore
+# TEMPORARY TESTING AND VALIDATION REPORTS
 # =============================================================================
-# Total: 200+ patterns covering all common development artifacts
-# Categories: 16 major categories with detailed subcategories
-# Last updated: Repository cleanup + AI development tools exclusion
-# Added: Claude Flow, GitHub, DevContainer, Swarm, Agents, Memory files
+*TEST_RESULTS.md
+*VALIDATION_REPORT.md
+*BENCHMARK_REPORT.md
+*AUDIT_REPORT.md
+
+# =============================================================================
+# END OF COMPREHENSIVE GITIGNORE
+# =============================================================================
+# This file ensures that only essential source code, configuration files,
+# and valuable documentation are tracked in version control.
+# All build artifacts, dependencies, temporary files, and development
+# artifacts are properly excluded to maintain a clean repository.
 # =============================================================================

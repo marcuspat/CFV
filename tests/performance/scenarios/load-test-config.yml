@@ -1,0 +1,277 @@
+# Artillery Load Testing Configuration
+# Comprehensive API performance testing for Cognitive Fabric Visualizer
+
+config:
+  target: 'http://localhost:3000'
+  phases:
+    # Warmup phase - gradual ramp up
+    - duration: 60
+      arrivalRate: 1
+      name: "Warm up"
+
+    # Normal load - expected traffic
+    - duration: 300
+      arrivalRate: 10
+      name: "Normal load"
+
+    # Peak load - maximum expected traffic
+    - duration: 180
+      arrivalRate: 50
+      name: "Peak load"
+
+    # Stress testing - beyond normal capacity
+    - duration: 120
+      arrivalRate: 100
+      name: "Stress test"
+
+    # Spike test - sudden traffic surge
+    - duration: 60
+      arrivalRate: 200
+      name: "Spike test"
+
+    # Recovery phase - return to normal
+    - duration: 180
+      arrivalRate: 10
+      name: "Recovery"
+
+  processor: "./load-test-processor.js"
+  http:
+    timeout: 10
+    pool: 50
+  variables:
+    username: "testuser"
+    email: "test@example.com"
+    password: "testpassword123"
+
+scenarios:
+  # Health check scenario
+  - name: "Health Check"
+    weight: 10
+    flow:
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+  # Authentication scenario
+  - name: "User Authentication"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/auth/register"
+          json:
+            username: "{{ username }}-{{ $randomString() }}"
+            email: "{{ $randomString() }}@example.com"
+            password: "{{ password }}"
+            fullName: "Test User {{ $randomString() }}"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+            - json: "$.user.id"
+              as: "userId"
+          expect:
+            - statusCode: 201
+            - contentType: json
+
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "{{ email }}"
+            password: "{{ password }}"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+  # Conversation management
+  - name: "Conversation Operations"
+    weight: 25
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "test@example.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/api/conversations"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+
+      - post:
+          url: "/api/conversations"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+            Content-Type: "application/json"
+          json:
+            title: "Performance Test Conversation {{ $randomString() }}"
+            metadata:
+              test: true
+              timestamp: "{{ $timestamp }}"
+          capture:
+            - json: "$.id"
+              as: "conversationId"
+          expect:
+            - statusCode: 201
+
+      - get:
+          url: "/api/conversations/{{ conversationId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+
+  # Cognitive analysis operations
+  - name: "Cognitive Analysis"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "test@example.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/api/conversations"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$[0].id"
+              as: "conversationId"
+          expect:
+            - statusCode: 200
+
+      - post:
+          url: "/api/analysis"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            conversationId: "{{ conversationId }}"
+            analysisType: "cognitive"
+            options:
+              includeVisualization: true
+              depth: "detailed"
+          expect:
+            - statusCode: 202
+
+      - loop:
+          - get:
+              url: "/api/analysis/{{ previousResponse.id }}"
+              headers:
+                Authorization: "Bearer {{ authToken }}"
+              expect:
+                - statusCode: 200
+        count: 5
+
+  # Visualization operations
+  - name: "Visualization Operations"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "test@example.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/api/conversations"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$[0].id"
+              as: "conversationId"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/api/visualizations/conversation/{{ conversationId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          query:
+            type: "cognitive"
+            format: "json"
+          expect:
+            - statusCode: 200
+
+      - post:
+          url: "/api/visualizations/generate"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            conversationId: "{{ conversationId }}"
+            visualizationType: "cognitive"
+            config:
+              includeConnections: true
+              depth: 3
+              layout: "force"
+          expect:
+            - statusCode: 201
+
+  # Export operations
+  - name: "Export Operations"
+    weight: 5
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "test@example.com"
+            password: "testpassword123"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      - get:
+          url: "/api/conversations"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$[0].id"
+              as: "conversationId"
+          expect:
+            - statusCode: 200
+
+      - post:
+          url: "/api/exports"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            conversationId: "{{ conversationId }}"
+            format: "json"
+            includeAnalysis: true
+            includeVisualization: true
+          capture:
+            - json: "$.id"
+              as: "exportId"
+          expect:
+            - statusCode: 201
+
+      - loop:
+          - get:
+              url: "/api/exports/{{ exportId }}"
+              headers:
+                Authorization: "Bearer {{ authToken }}"
+              expect:
+                - statusCode: 200
+        count: 10

@@ -25,6 +25,17 @@ import analysisRoutes from './routes/analysis';
 import visualizationRoutes from './routes/visualization';
 import exportRoutes from './routes/export';
 
+// Import monitoring services
+// Temporarily disabled for testing
+// import {
+//   initializeMonitoring,
+//   shutdownMonitoring,
+//   createMiddleware,
+//   trackQuery,
+//   trackAgentTask,
+//   completeAgentTask
+// } from './services/monitoring/index.js';
+
 class App {
   public app: Application;
   public server: any;
@@ -34,9 +45,40 @@ class App {
     this.app = express();
     this.server = createServer(this.app);
 
+    // Initialize monitoring first
+    this.initializeMonitoring();
+
     this.initializeMiddlewares();
-    this.initializeRoutes();
+    // Note: initializeRoutes is called in start() method as it's async
     this.initializeErrorHandling();
+  }
+
+  private initializeMonitoring(): void {
+    // Temporarily disabled for testing
+    logger.info('Performance monitoring disabled for testing');
+    // try {
+    //   initializeMonitoring({
+    //     enabled: true,
+    //     interval: 5000,
+    //     thresholds: {
+    //       responseTime: { warning: 500, critical: 2000 },
+    //       cpu: { warning: 70, critical: 90 },
+    //       memory: { warning: 75, critical: 90 },
+    //       diskIO: { readWarning: 50, readCritical: 100, writeWarning: 30, writeCritical: 60 },
+    //       network: { latencyWarning: 100, latencyCritical: 500, throughputWarning: 100, throughputCritical: 50 },
+    //       database: { queryTimeWarning: 200, queryTimeCritical: 1000, connectionWarning: 80, connectionCritical: 95 },
+    //       agentCoordination: { overheadWarning: 50, overheadCritical: 200, throughputWarning: 100, throughputCritical: 50 }
+    //     },
+    //     retention: {
+    //       metrics: 30,
+    //       logs: 7,
+    //       alerts: 30
+    //     }
+    //   });
+    //   logger.info('Performance monitoring initialized');
+    // } catch (error) {
+    //   logger.error('Failed to initialize monitoring', { error });
+    // }
   }
 
   private initializeMiddlewares(): void {
@@ -59,6 +101,9 @@ class App {
 
     // Rate limiting
     this.app.use(rateLimit(serverConfig.rateLimit));
+
+    // Monitoring middleware for API performance tracking (temporarily disabled)
+    // this.app.use('/api', createMiddleware());
 
     // Request logging
     this.app.use((req: Request, res: Response, next: NextFunction) => {
@@ -83,9 +128,18 @@ class App {
     this.app.set('trust proxy', 1);
   }
 
-  private initializeRoutes(): void {
+  private async initializeRoutes(): Promise<void> {
     // Health check (no auth required)
     this.app.use('/health', healthRoutes);
+
+    // Monitoring routes (no auth required for basic monitoring)
+    // Temporarily disabled for testing
+    // try {
+    //   const monitoringRoutes = (await import('./routes/monitoring')).default;
+    //   this.app.use('/api/monitoring', monitoringRoutes);
+    // } catch (error) {
+    //   logger.error('Failed to load monitoring routes', { error });
+    // }
 
     // Authentication routes (no auth required)
     this.app.use('/api/auth', authRoutes);
@@ -106,6 +160,7 @@ class App {
         timestamp: new Date().toISOString(),
         endpoints: {
           health: '/health',
+          // monitoring: '/api/monitoring', // Temporarily disabled
           auth: '/api/auth',
           conversations: '/api/conversations',
           analysis: '/api/analysis',
@@ -169,6 +224,9 @@ class App {
         // Continue without databases for development
       }
 
+      // Initialize routes (async)
+      await this.initializeRoutes();
+
       // Initialize WebSocket
       await this.initializeWebSocket();
 
@@ -205,6 +263,10 @@ class App {
             this.wsServer.close();
             logger.info('WebSocket server closed');
           }
+
+          // Shutdown monitoring system (temporarily disabled)
+          // await shutdownMonitoring();
+          logger.info('Performance monitoring shutdown disabled');
 
           // Close database connections
           await database.close();

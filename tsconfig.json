@@ -1,10 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
+    "module": "ESNext",
     "moduleResolution": "node",
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -12,20 +12,8 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": false,
-    "jsx": "react-jsx",
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "noImplicitAny": false,
-    "strictNullChecks": false
+    "noEmit": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"],
-  "baseUrl": ".",
-  "paths": {
-    "@/components/*": ["src/client/components/*"],
-    "@/utils/*": ["src/client/utils/*"],
-    "@/types/*": ["src/types/*"]
-  }
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

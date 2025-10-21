@@ -96,11 +96,9 @@ class Logger {
         break;
     }
 
-    // In production, you might want to send logs to external services
-    if (config.NODE_ENV === 'production') {
-      // TODO: Implement external logging service integration
-      // Examples: Winston, Papertrail, LogDNA, etc.
-    }
+    // In production, consider implementing external logging service integration
+    // Examples: Winston, Papertrail, LogDNA, etc.
+    // This is a placeholder for future production logging enhancements
   }
 
   public error(message: string, metadata?: any, error?: Error): void {
