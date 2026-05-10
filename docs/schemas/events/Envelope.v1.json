@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/Envelope.v1.json",
+  "title": "Domain Event Envelope v1",
+  "description": "Common envelope wrapping every CFV domain event. See docs/ddd/08-domain-events.md.",
+  "type": "object",
+  "required": [
+    "eventId",
+    "eventType",
+    "schemaVersion",
+    "occurredAt",
+    "tenantId",
+    "actor",
+    "correlationId",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "description": "Globally unique event id (ULID).",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "eventType": {
+      "type": "string",
+      "description": "PascalCase past-tense event name."
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenantId": { "$ref": "#/$defs/Ulid" },
+    "actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["USER", "SERVICE", "SYSTEM"] },
+        "id": { "$ref": "#/$defs/Ulid" }
+      }
+    },
+    "correlationId": { "$ref": "#/$defs/Ulid" },
+    "causationId": { "$ref": "#/$defs/Ulid" },
+    "payload": { "type": "object" }
+  },
+  "$defs": {
+    "Ulid": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    }
+  }
+}

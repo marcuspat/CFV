@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/GraphEdgeFormed.v1.json",
+  "title": "GraphEdgeFormed event payload v1",
+  "type": "object",
+  "required": ["conversationId", "from", "to", "edgeType", "weight", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "conversationId": { "$ref": "#/$defs/Ulid" },
+    "from": { "$ref": "#/$defs/Ulid" },
+    "to": { "$ref": "#/$defs/Ulid" },
+    "edgeType": {
+      "enum": ["SUPPORTS", "CONTRADICTS", "EXTENDS", "REFERENCES"]
+    },
+    "weight": {
+      "type": "object",
+      "required": ["value", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source": { "enum": ["OBSERVED", "PREDICTED"] }
+      }
+    },
+    "version": { "type": "integer", "minimum": 1 }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

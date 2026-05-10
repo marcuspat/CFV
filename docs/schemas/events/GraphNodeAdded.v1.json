@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/GraphNodeAdded.v1.json",
+  "title": "GraphNodeAdded event payload v1",
+  "type": "object",
+  "required": ["conversationId", "cognitiveElementId", "dimension", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "conversationId": { "$ref": "#/$defs/Ulid" },
+    "cognitiveElementId": { "$ref": "#/$defs/Ulid" },
+    "dimension": {
+      "enum": [
+        "FACTUAL_RETRIEVAL",
+        "LOGICAL_INFERENCE",
+        "CREATIVE_SYNTHESIS",
+        "META_COGNITION"
+      ]
+    },
+    "version": { "type": "integer", "minimum": 1 }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

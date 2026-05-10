@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/AnalysisStarted.v1.json",
+  "title": "AnalysisStarted event payload v1",
+  "description": "Emitted by Cognitive Analysis when an Analysis aggregate transitions to STARTED.",
+  "type": "object",
+  "required": ["analysisId", "conversationId", "bundleVersion", "parameters"],
+  "additionalProperties": false,
+  "properties": {
+    "analysisId": { "$ref": "#/$defs/Ulid" },
+    "conversationId": { "$ref": "#/$defs/Ulid" },
+    "bundleVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

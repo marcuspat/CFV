@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/AnalysisCompleted.v1.json",
+  "title": "AnalysisCompleted event payload v1",
+  "type": "object",
+  "required": ["analysisId", "elementCount", "bundleVersion", "durationMs"],
+  "additionalProperties": false,
+  "properties": {
+    "analysisId": { "$ref": "#/$defs/Ulid" },
+    "elementCount": { "type": "integer", "minimum": 0 },
+    "bundleVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "durationMs": { "type": "integer", "minimum": 0 },
+    "degradedReason": { "type": "string" }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}
