@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/ConversationSegmented.v1.json",
+  "title": "ConversationSegmented event payload v1",
+  "description": "Emitted when the DialogueSegmenter has produced SegmentBoundary set for a Conversation.",
+  "type": "object",
+  "required": ["conversationId", "segmentCount", "segmentationSource"],
+  "additionalProperties": false,
+  "properties": {
+    "conversationId": { "$ref": "#/$defs/Ulid" },
+    "segmentCount": { "type": "integer", "minimum": 0 },
+    "segmentationSource": { "enum": ["RASA", "FALLBACK"] }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

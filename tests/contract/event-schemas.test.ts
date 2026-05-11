@@ -31,11 +31,21 @@ function listSchemaFiles(): string[] {
 describe('event schema catalogue', () => {
   const schemas = listSchemaFiles();
 
-  it('contains at least the Phase 0 baseline events', () => {
+  it('contains at least the Phase 0+1+2 baseline events', () => {
     const required = [
       'Envelope.v1.json',
+      // Phase 1 — Identity & Access
       'UserRegistered.v1.json',
       'UserDisabled.v1.json',
+      // Phase 2 — Conversation Ingestion + Multimodal
+      'ConversationIngested.v1.json',
+      'ConversationSegmented.v1.json',
+      'ConversationDeleted.v1.json',
+      'AnalysisRequested.v1.json',
+      'MediaUploaded.v1.json',
+      'MediaProcessed.v1.json',
+      'MediaPurged.v1.json',
+      // Cognitive pipeline — schemas present ahead of full impl
       'AnalysisStarted.v1.json',
       'AnalysisCompleted.v1.json',
       'CognitiveElementDetected.v1.json',

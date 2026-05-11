@@ -35,14 +35,21 @@ This is an initial slice covering the highest-traffic events. The full
 catalogue from `docs/ddd/08-domain-events.md` will be added incrementally
 during Phase 4–9 of the implementation roadmap.
 
-| Event                       | Schema present | Notes                       |
-|-----------------------------|----------------|-----------------------------|
-| (envelope)                  | yes            | shared by all events        |
-| `UserRegistered`            | yes            | Identity & Access — Phase 1 |
-| `UserDisabled`              | yes            | Identity & Access — Phase 1 |
-| `AnalysisStarted`           | yes            | Cognitive Analysis          |
-| `AnalysisCompleted`         | yes            | Cognitive Analysis          |
-| `CognitiveElementDetected`  | yes            | Cognitive Analysis          |
-| `GraphNodeAdded`            | yes            | Cognitive Graph             |
-| `GraphEdgeFormed`           | yes            | Cognitive Graph             |
-| (others)                    | pending        | added per phase             |
+| Event                       | Schema present | Notes                              |
+|-----------------------------|----------------|------------------------------------|
+| (envelope)                  | yes            | shared by all events               |
+| `UserRegistered`            | yes            | Identity & Access — Phase 1        |
+| `UserDisabled`              | yes            | Identity & Access — Phase 1        |
+| `ConversationIngested`      | yes            | Conversation Ingestion — Phase 2   |
+| `ConversationSegmented`     | yes            | Conversation Ingestion — Phase 2   |
+| `ConversationDeleted`       | yes            | Conversation Ingestion — Phase 2   |
+| `AnalysisRequested`         | yes            | Conversation Ingestion — Phase 2   |
+| `MediaUploaded`             | yes            | Multimodal Ingestion — Phase 2     |
+| `MediaProcessed`            | yes            | Multimodal Ingestion — Phase 2     |
+| `MediaPurged`               | yes            | Multimodal Ingestion — Phase 2     |
+| `AnalysisStarted`           | yes            | Cognitive Analysis                 |
+| `AnalysisCompleted`         | yes            | Cognitive Analysis                 |
+| `CognitiveElementDetected`  | yes            | Cognitive Analysis                 |
+| `GraphNodeAdded`            | yes            | Cognitive Graph                    |
+| `GraphEdgeFormed`           | yes            | Cognitive Graph                    |
+| (others)                    | pending        | added per phase                    |

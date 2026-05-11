@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/AnalysisRequested.v1.json",
+  "title": "AnalysisRequested event payload v1",
+  "description": "Emitted by Conversation Ingestion when a user (or process) requests an Analysis run.",
+  "type": "object",
+  "required": ["conversationId", "requestedBy", "bundleVersion", "parameters"],
+  "additionalProperties": false,
+  "properties": {
+    "conversationId": { "$ref": "#/$defs/Ulid" },
+    "requestedBy": { "$ref": "#/$defs/Ulid" },
+    "bundleVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "parameters": { "type": "object", "additionalProperties": true }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

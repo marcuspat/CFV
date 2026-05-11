@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/ConversationIngested.v1.json",
+  "title": "ConversationIngested event payload v1",
+  "description": "Emitted by Conversation Ingestion when a Conversation transitions to INGESTED.",
+  "type": "object",
+  "required": ["conversationId", "tenantId", "sourceModality", "turnCount"],
+  "additionalProperties": false,
+  "properties": {
+    "conversationId": { "$ref": "#/$defs/Ulid" },
+    "tenantId": { "$ref": "#/$defs/Ulid" },
+    "sourceModality": { "enum": ["TEXT", "AUDIO", "VIDEO"] },
+    "turnCount": { "type": "integer", "minimum": 0 },
+    "derivedFromConversationId": { "$ref": "#/$defs/Ulid" }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}
