@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/BundleDraftCreated.v1.json",
+  "title": "BundleDraftCreated event payload v1",
+  "description": "Emitted by Model Management when a new AnalysisBundle is created in DRAFT state.",
+  "type": "object",
+  "required": ["bundleVersion", "createdBy"],
+  "additionalProperties": false,
+  "properties": {
+    "bundleVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "createdBy": { "$ref": "#/$defs/Ulid" }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

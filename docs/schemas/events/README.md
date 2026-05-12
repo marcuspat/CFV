@@ -47,6 +47,12 @@ during Phase 4–9 of the implementation roadmap.
 | `MediaUploaded`             | yes            | Multimodal Ingestion — Phase 2     |
 | `MediaProcessed`            | yes            | Multimodal Ingestion — Phase 2     |
 | `MediaPurged`               | yes            | Multimodal Ingestion — Phase 2     |
+| `BundleDraftCreated`        | yes            | Model Management — Phase 3         |
+| `BundlePromotedToShadow`    | yes            | Model Management — Phase 3         |
+| `ShadowAnalysisCompleted`   | yes            | Model Management — Phase 3         |
+| `BundlePromotedToActive`    | yes            | Model Management — Phase 3         |
+| `BundleRolledBack`          | yes            | Model Management — Phase 3         |
+| `CalibrationRecomputed`     | yes            | Model Management — Phase 3         |
 | `AnalysisStarted`           | yes            | Cognitive Analysis                 |
 | `AnalysisCompleted`         | yes            | Cognitive Analysis                 |
 | `CognitiveElementDetected`  | yes            | Cognitive Analysis                 |

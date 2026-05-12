@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/CalibrationRecomputed.v1.json",
+  "title": "CalibrationRecomputed event payload v1",
+  "type": "object",
+  "required": ["bundleVersion", "effectiveAt"],
+  "additionalProperties": false,
+  "properties": {
+    "bundleVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "effectiveAt": { "type": "string", "format": "date-time" }
+  }
+}

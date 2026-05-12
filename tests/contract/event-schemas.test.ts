@@ -31,7 +31,7 @@ function listSchemaFiles(): string[] {
 describe('event schema catalogue', () => {
   const schemas = listSchemaFiles();
 
-  it('contains at least the Phase 0+1+2 baseline events', () => {
+  it('contains at least the Phase 0+1+2+3 baseline events', () => {
     const required = [
       'Envelope.v1.json',
       // Phase 1 — Identity & Access
@@ -45,6 +45,13 @@ describe('event schema catalogue', () => {
       'MediaUploaded.v1.json',
       'MediaProcessed.v1.json',
       'MediaPurged.v1.json',
+      // Phase 3 — Model Management
+      'BundleDraftCreated.v1.json',
+      'BundlePromotedToShadow.v1.json',
+      'ShadowAnalysisCompleted.v1.json',
+      'BundlePromotedToActive.v1.json',
+      'BundleRolledBack.v1.json',
+      'CalibrationRecomputed.v1.json',
       // Cognitive pipeline — schemas present ahead of full impl
       'AnalysisStarted.v1.json',
       'AnalysisCompleted.v1.json',

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/BundlePromotedToShadow.v1.json",
+  "title": "BundlePromotedToShadow event payload v1",
+  "type": "object",
+  "required": ["bundleVersion"],
+  "additionalProperties": false,
+  "properties": {
+    "bundleVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(\\+[A-Za-z0-9.-]+)?$"
+    }
+  }
+}

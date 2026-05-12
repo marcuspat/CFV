@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/BundleRolledBack.v1.json",
+  "title": "BundleRolledBack event payload v1",
+  "description": "Rollback re-pins ACTIVE to a prior version; the previous ACTIVE transitions to RETIRED.",
+  "type": "object",
+  "required": ["from", "to", "reason"],
+  "additionalProperties": false,
+  "properties": {
+    "from": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "to": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "reason": { "type": "string", "minLength": 1 }
+  }
+}

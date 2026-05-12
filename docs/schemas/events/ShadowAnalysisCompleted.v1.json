@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/ShadowAnalysisCompleted.v1.json",
+  "title": "ShadowAnalysisCompleted event payload v1",
+  "description": "Emitted when a shadow analysis run finishes; carries per-dimension metrics for the BundlePromotionPolicy.",
+  "type": "object",
+  "required": ["bundleVersion", "analysisId", "metrics"],
+  "additionalProperties": false,
+  "properties": {
+    "bundleVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(\\+[A-Za-z0-9.-]+)?$"
+    },
+    "analysisId": { "$ref": "#/$defs/Ulid" },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "factualRetrievalAccuracy",
+        "logicalInferencePrecision",
+        "creativeSynthesisRougeL",
+        "metaCognitionF1"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "factualRetrievalAccuracy":  { "type": "number", "minimum": 0, "maximum": 1 },
+        "logicalInferencePrecision": { "type": "number", "minimum": 0, "maximum": 1 },
+        "creativeSynthesisRougeL":   { "type": "number", "minimum": 0, "maximum": 1 },
+        "metaCognitionF1":           { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}
