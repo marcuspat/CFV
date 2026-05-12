@@ -53,9 +53,14 @@ during Phase 4–9 of the implementation roadmap.
 | `BundlePromotedToActive`    | yes            | Model Management — Phase 3         |
 | `BundleRolledBack`          | yes            | Model Management — Phase 3         |
 | `CalibrationRecomputed`     | yes            | Model Management — Phase 3         |
-| `AnalysisStarted`           | yes            | Cognitive Analysis                 |
-| `AnalysisCompleted`         | yes            | Cognitive Analysis                 |
-| `CognitiveElementDetected`  | yes            | Cognitive Analysis                 |
+| `AnalysisStarted`           | yes            | Cognitive Analysis — Phase 4       |
+| `AnalysisStageStarted`      | yes            | Cognitive Analysis — Phase 4       |
+| `AnalysisStageCompleted`    | yes            | Cognitive Analysis — Phase 4       |
+| `AnalysisStageFailed`       | yes            | Cognitive Analysis — Phase 4       |
+| `AnalysisDegraded`          | yes            | Cognitive Analysis — Phase 4       |
+| `AnalysisCompleted`         | yes            | Cognitive Analysis — Phase 4       |
+| `AnalysisFailed`            | yes            | Cognitive Analysis — Phase 4       |
+| `CognitiveElementDetected`  | yes            | Cognitive Analysis — Phase 4       |
 | `GraphNodeAdded`            | yes            | Cognitive Graph                    |
 | `GraphEdgeFormed`           | yes            | Cognitive Graph                    |
 | (others)                    | pending        | added per phase                    |

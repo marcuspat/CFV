@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/AnalysisStageFailed.v1.json",
+  "title": "AnalysisStageFailed event payload v1",
+  "type": "object",
+  "required": ["analysisId", "stage", "errorClass", "retryable"],
+  "additionalProperties": false,
+  "properties": {
+    "analysisId": { "$ref": "#/$defs/Ulid" },
+    "stage": {
+      "enum": ["SEGMENT", "DECOMPOSE", "FUSE", "SYMBOLIC", "GRAPH_UPDATE", "THREAD_PREDICT", "NOTIFY"]
+    },
+    "errorClass": { "type": "string", "minLength": 1 },
+    "retryable": { "type": "boolean" }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

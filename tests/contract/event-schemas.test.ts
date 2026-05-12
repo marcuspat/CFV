@@ -52,10 +52,16 @@ describe('event schema catalogue', () => {
       'BundlePromotedToActive.v1.json',
       'BundleRolledBack.v1.json',
       'CalibrationRecomputed.v1.json',
-      // Cognitive pipeline — schemas present ahead of full impl
+      // Phase 4 — Cognitive Analysis CORE
       'AnalysisStarted.v1.json',
+      'AnalysisStageStarted.v1.json',
+      'AnalysisStageCompleted.v1.json',
+      'AnalysisStageFailed.v1.json',
+      'AnalysisDegraded.v1.json',
       'AnalysisCompleted.v1.json',
+      'AnalysisFailed.v1.json',
       'CognitiveElementDetected.v1.json',
+      // Cognitive Graph (Phase 5) — schemas present ahead of full impl
       'GraphNodeAdded.v1.json',
       'GraphEdgeFormed.v1.json',
     ];

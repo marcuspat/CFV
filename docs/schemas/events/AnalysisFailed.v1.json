@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/AnalysisFailed.v1.json",
+  "title": "AnalysisFailed event payload v1",
+  "type": "object",
+  "required": ["analysisId", "errorClass", "recoverable"],
+  "additionalProperties": false,
+  "properties": {
+    "analysisId": { "$ref": "#/$defs/Ulid" },
+    "errorClass": { "type": "string", "minLength": 1 },
+    "recoverable": { "type": "boolean" }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}
