@@ -61,6 +61,9 @@ during Phase 4–9 of the implementation roadmap.
 | `AnalysisCompleted`         | yes            | Cognitive Analysis — Phase 4       |
 | `AnalysisFailed`            | yes            | Cognitive Analysis — Phase 4       |
 | `CognitiveElementDetected`  | yes            | Cognitive Analysis — Phase 4       |
-| `GraphNodeAdded`            | yes            | Cognitive Graph                    |
-| `GraphEdgeFormed`           | yes            | Cognitive Graph                    |
+| `GraphNodeAdded`            | yes            | Cognitive Graph — Phase 5          |
+| `GraphEdgeFormed`           | yes            | Cognitive Graph — Phase 5          |
+| `PredictedEdgeProposed`     | yes            | Cognitive Graph — Phase 5          |
+| `PredictedEdgeRealised`     | yes            | Cognitive Graph — Phase 5          |
+| `ThreadEvolved`             | yes            | Cognitive Graph — Phase 5          |
 | (others)                    | pending        | added per phase                    |

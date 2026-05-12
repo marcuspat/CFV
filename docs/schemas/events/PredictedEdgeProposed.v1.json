@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/PredictedEdgeProposed.v1.json",
+  "title": "PredictedEdgeProposed event payload v1",
+  "description": "Emitted when the DGNN proposes an edge that has not yet been realised by an observed cross-turn reference (ADR-0010).",
+  "type": "object",
+  "required": ["conversationId", "predictedEdgeId", "from", "to", "edgeType", "confidenceInterval"],
+  "additionalProperties": false,
+  "properties": {
+    "conversationId":  { "$ref": "#/$defs/Ulid" },
+    "predictedEdgeId": { "$ref": "#/$defs/Ulid" },
+    "from":            { "$ref": "#/$defs/Ulid" },
+    "to":              { "$ref": "#/$defs/Ulid" },
+    "edgeType":        { "enum": ["SUPPORTS", "CONTRADICTS", "EXTENDS", "REFERENCES"] },
+    "confidenceInterval": {
+      "type": "object",
+      "required": ["low", "median", "high"],
+      "additionalProperties": false,
+      "properties": {
+        "low":    { "type": "number", "minimum": 0, "maximum": 1 },
+        "median": { "type": "number", "minimum": 0, "maximum": 1 },
+        "high":   { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

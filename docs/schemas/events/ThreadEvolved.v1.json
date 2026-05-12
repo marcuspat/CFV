@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/ThreadEvolved.v1.json",
+  "title": "ThreadEvolved event payload v1",
+  "description": "Emitted by the ThreadDetector when a thread's node membership changes.",
+  "type": "object",
+  "required": ["conversationId", "threadId", "addedNodes", "dominantDimension"],
+  "additionalProperties": false,
+  "properties": {
+    "conversationId":    { "$ref": "#/$defs/Ulid" },
+    "threadId":          { "$ref": "#/$defs/Ulid" },
+    "addedNodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Ulid" }
+    },
+    "dominantDimension": {
+      "enum": ["FACTUAL_RETRIEVAL", "LOGICAL_INFERENCE", "CREATIVE_SYNTHESIS", "META_COGNITION"]
+    }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}

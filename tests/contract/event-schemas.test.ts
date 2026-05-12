@@ -61,9 +61,12 @@ describe('event schema catalogue', () => {
       'AnalysisCompleted.v1.json',
       'AnalysisFailed.v1.json',
       'CognitiveElementDetected.v1.json',
-      // Cognitive Graph (Phase 5) — schemas present ahead of full impl
+      // Phase 5 — Cognitive Graph CORE
       'GraphNodeAdded.v1.json',
       'GraphEdgeFormed.v1.json',
+      'PredictedEdgeProposed.v1.json',
+      'PredictedEdgeRealised.v1.json',
+      'ThreadEvolved.v1.json',
     ];
     for (const name of required) {
       expect(schemas).toContain(name);

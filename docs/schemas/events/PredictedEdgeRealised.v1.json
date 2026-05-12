@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cfv.dev/schemas/events/PredictedEdgeRealised.v1.json",
+  "title": "PredictedEdgeRealised event payload v1",
+  "description": "Emitted when a PredictedEdge is upgraded to an observed GraphEdge.",
+  "type": "object",
+  "required": ["conversationId", "predictedEdgeId", "becameEdgeId"],
+  "additionalProperties": false,
+  "properties": {
+    "conversationId":  { "$ref": "#/$defs/Ulid" },
+    "predictedEdgeId": { "$ref": "#/$defs/Ulid" },
+    "becameEdgeId":    { "$ref": "#/$defs/Ulid" }
+  },
+  "$defs": {
+    "Ulid": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+  }
+}
