@@ -1,268 +1,181 @@
 /**
- * Conversation management routes
+ * Conversation management routes — backed by the Conversation Ingestion
+ * bounded context against PostgreSQL. Replaces the previous in-memory mock.
+ *
+ * The HTTP surface accepts either a structured `turns` array or a legacy
+ * `transcript: string[]`; speaker labels are mapped to ULID SpeakerIds so
+ * callers need not mint identifiers themselves.
  */
 
-import { Router, Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
-import { AuthenticatedRequest } from '../middleware/auth';
-import {
-  Conversation,
-  ProcessingStatus,
-  CreateConversationRequest,
-  CreateConversationResponse,
-  GetConversationResponse,
-  ListConversationsQuery,
-  ListConversationsResponse,
-  ConversationMetadata
-} from '../../types';
-import { logger } from '../utils/logger';
-import database from '../config/database';
+import { Router, type Response } from 'express';
+import { asyncHandler } from '../middleware/errorHandler';
+import type { AuthenticatedRequest } from '../middleware/auth';
+import { UlidIdGenerator } from '../contexts/identity/infrastructure/production';
+import { TenantId, ConversationId } from '../contexts/conversation-ingestion/domain/value-objects';
+import type { Conversation } from '../contexts/conversation-ingestion/domain/conversation';
+import type { ConversationModule } from '../composition/conversation-ingestion';
+import type { ApplicationError } from '../contexts/conversation-ingestion/application/ports';
 
-const router = Router();
+const ids = new UlidIdGenerator();
 
-// Mock conversation storage (in production, use database)
-const conversations: Conversation[] = [];
-
-// Create new conversation
-router.post('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const { title, transcript, metadata }: CreateConversationRequest = req.body;
-
-  // Validate input
-  if (!title || !transcript || !Array.isArray(transcript) || transcript.length === 0) {
-    throw new ValidationError('Title and non-empty transcript array are required');
+function statusFor(error: ApplicationError): number {
+  switch (error.kind) {
+    case 'InputInvalid':
+      return 400;
+    case 'NotFound':
+      return 404;
+    case 'Conflict':
+      return 409;
+    case 'PreconditionFailed':
+      return 422;
+    default:
+      return 400;
   }
+}
 
-  if (transcript.some((entry: any) => typeof entry !== 'string')) {
-    throw new ValidationError('All transcript entries must be strings');
-  }
-
-  // Create conversation
-  const conversation: Conversation = {
-    id: uuidv4(),
-    title,
-    transcript,
-    metadata: {
-      duration: transcript.reduce((acc, entry) => acc + (entry.split(' ').length * 0.5), 0), // Rough estimate
-      participantCount: 2, // Default assumption
-      language: metadata?.language || 'en',
-      domain: metadata?.domain,
-      tags: metadata?.tags || [],
-    },
-    processingStatus: ProcessingStatus.PENDING,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+function toDto(c: Conversation): Record<string, unknown> {
+  const s = c.snapshot();
+  return {
+    id: s.id,
+    title: s.title,
+    sourceModality: s.sourceModality,
+    status: s.status,
+    createdAt: s.createdAt,
+    turns: s.turns.map((t) => ({
+      id: t.id,
+      speakerId: t.speakerId,
+      text: t.text,
+      timestamp: t.timestamp,
+      turnIndex: t.turnIndex,
+    })),
+    segments: s.segments,
+    version: s.version,
   };
+}
 
-  // Save to database (mock for now)
-  conversations.push(conversation);
+interface RawTurn {
+  readonly speaker?: string;
+  readonly speakerId?: string;
+  readonly text: string;
+  readonly timestamp?: string;
+}
 
-  logger.info('Conversation created', {
-    conversationId: conversation.id,
-    userId: user.id,
-    title: conversation.title,
-    transcriptLength: transcript.length,
-  });
-
-  const response: CreateConversationResponse = {
-    conversationId: conversation.id,
-    status: conversation.processingStatus,
-    estimatedDuration: Math.round(transcript.length * 2), // 2 seconds per transcript entry
-  };
-
-  res.status(201).json(response);
-}));
-
-// Get conversation by ID
-router.get('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const { id } = req.params;
-
-  const conversation = conversations.find(c => c.id === id);
-  if (!conversation) {
-    throw new NotFoundError('Conversation not found');
-  }
-
-  // In production, verify user has access to this conversation
-  // For now, allow all authenticated users
-
-  logger.info('Conversation retrieved', {
-    conversationId: conversation.id,
-    userId: user.id,
-    status: conversation.processingStatus,
-  });
-
-  const response: GetConversationResponse = {
-    conversation,
-    status: conversation.processingStatus,
-  };
-
-  res.json(response);
-}));
-
-// List conversations with filtering and pagination
-router.get('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const {
-    page = 1,
-    limit = 20,
-    status,
-    domain,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
-  }: ListConversationsQuery = req.query as any;
-
-  // Parse pagination parameters
-  const pageNum = Math.max(1, parseInt(String(page)));
-  const limitNum = Math.min(100, Math.max(1, parseInt(String(limit))));
-  const offset = (pageNum - 1) * limitNum;
-
-  // Filter conversations
-  let filteredConversations = conversations.filter(c => {
-    if (status && c.processingStatus !== status) return false;
-    if (domain && c.metadata.domain !== domain) return false;
-    return true;
-  });
-
-  // Sort conversations
-  filteredConversations.sort((a, b) => {
-    let aValue: any = a[sortBy as keyof Conversation] || a.metadata[sortBy as keyof ConversationMetadata];
-    let bValue: any = b[sortBy as keyof Conversation] || b.metadata[sortBy as keyof ConversationMetadata];
-
-    if (aValue instanceof Date) aValue = aValue.getTime();
-    if (bValue instanceof Date) bValue = bValue.getTime();
-
-    if (sortOrder === 'asc') {
-      return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-    } else {
-      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+/** Build domain-shaped turns from either `turns` or legacy `transcript`. */
+function buildTurns(body: { turns?: RawTurn[]; transcript?: string[] }): Array<{
+  speakerId: string;
+  text: string;
+  timestamp: string;
+}> | null {
+  const speakerIds = new Map<string, string>();
+  const speakerIdFor = (label: string): string => {
+    let id = speakerIds.get(label);
+    if (!id) {
+      id = ids.newId();
+      speakerIds.set(label, id);
     }
-  });
-
-  // Paginate
-  const paginatedConversations = filteredConversations.slice(offset, offset + limitNum);
-  const total = filteredConversations.length;
-  const totalPages = Math.ceil(total / limitNum);
-
-  const response: ListConversationsResponse = {
-    conversations: paginatedConversations,
-    total,
-    page: pageNum,
-    totalPages,
-    hasNext: pageNum < totalPages,
-    hasPrev: pageNum > 1,
+    return id;
   };
+  const base = Date.now();
 
-  logger.info('Conversations listed', {
-    userId: user.id,
-    page: pageNum,
-    limit: limitNum,
-    total,
-    filters: { status, domain },
-  });
-
-  res.json(response);
-}));
-
-// Update conversation metadata
-router.put('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const { id } = req.params;
-  const updates = req.body;
-
-  const conversationIndex = conversations.findIndex(c => c.id === id);
-  if (conversationIndex === -1) {
-    throw new NotFoundError('Conversation not found');
+  if (Array.isArray(body.turns) && body.turns.length > 0) {
+    return body.turns.map((t, i) => ({
+      speakerId: t.speakerId && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(t.speakerId)
+        ? t.speakerId
+        : speakerIdFor(t.speaker ?? `speaker-${i % 2}`),
+      text: t.text,
+      timestamp: t.timestamp ?? new Date(base + i * 1000).toISOString(),
+    }));
   }
 
-  // Update allowed fields
-  const allowedFields = ['title', 'metadata'];
-  const filteredUpdates: Partial<Conversation> = {};
-
-  for (const field of allowedFields) {
-    if (updates[field] !== undefined) {
-      filteredUpdates[field] = updates[field];
-    }
+  if (Array.isArray(body.transcript) && body.transcript.length > 0) {
+    return body.transcript.map((text, i) => ({
+      speakerId: speakerIdFor(`speaker-${i % 2}`),
+      text,
+      timestamp: new Date(base + i * 1000).toISOString(),
+    }));
   }
 
-  if (filteredUpdates.metadata) {
-    filteredUpdates.metadata = {
-      ...conversations[conversationIndex].metadata,
-      ...filteredUpdates.metadata,
-    };
-  }
+  return null;
+}
 
-  // Update conversation
-  conversations[conversationIndex] = {
-    ...conversations[conversationIndex],
-    ...filteredUpdates,
-    updatedAt: new Date(),
-  };
+export function createConversationsRouter(module: ConversationModule): Router {
+  const router = Router();
 
-  logger.info('Conversation updated', {
-    conversationId: id,
-    userId: user.id,
-    updatedFields: Object.keys(filteredUpdates),
-  });
+  // Create (ingest) a conversation.
+  router.post(
+    '/',
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      const tenantId = req.auth?.tenantId;
+      if (!tenantId) return res.status(401).json({ error: { kind: 'Unauthorised' } });
 
-  res.json({
-    conversation: conversations[conversationIndex],
-  });
-}));
+      const turns = buildTurns(req.body ?? {});
+      if (!turns) {
+        return res.status(400).json({
+          error: { kind: 'InputInvalid', field: 'turns', reason: 'turns or transcript required' },
+        });
+      }
 
-// Delete conversation
-router.delete('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const { id } = req.params;
+      const result = await module.ingestText({
+        tenantId,
+        title: req.body?.title,
+        turns,
+      });
+      if (!result.ok) return res.status(statusFor(result.error)).json({ error: result.error });
+      res.status(201).json({ conversationId: result.value.conversationId, status: 'INGESTED' });
+    }),
+  );
 
-  const conversationIndex = conversations.findIndex(c => c.id === id);
-  if (conversationIndex === -1) {
-    throw new NotFoundError('Conversation not found');
-  }
+  // List conversations for the tenant (offset/limit paging).
+  router.get(
+    '/',
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      const tenantRaw = req.auth?.tenantId;
+      if (!tenantRaw) return res.status(401).json({ error: { kind: 'Unauthorised' } });
+      const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? '20'), 10) || 20));
+      const rows = await module.conversations.listForTenant(TenantId.of(tenantRaw), {
+        offset: (page - 1) * limit,
+        limit,
+      });
+      res.json({ conversations: rows.map(toDto), page, limit });
+    }),
+  );
 
-  // Delete conversation (in production, also delete related analyses, visualizations, etc.)
-  conversations.splice(conversationIndex, 1);
+  // Fetch one conversation (tenant-isolated).
+  router.get(
+    '/:id',
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      const tenantRaw = req.auth?.tenantId;
+      if (!tenantRaw) return res.status(401).json({ error: { kind: 'Unauthorised' } });
+      let id: ConversationId;
+      try {
+        id = ConversationId.of(req.params.id);
+      } catch {
+        return res.status(400).json({ error: { kind: 'InputInvalid', field: 'id', reason: 'invalid' } });
+      }
+      const conv = await module.conversations.findById(id, TenantId.of(tenantRaw));
+      if (!conv) return res.status(404).json({ error: { kind: 'NotFound', resource: 'conversation' } });
+      res.json({ conversation: toDto(conv) });
+    }),
+  );
 
-  logger.info('Conversation deleted', {
-    conversationId: id,
-    userId: user.id,
-  });
+  // Soft-delete a conversation.
+  router.delete(
+    '/:id',
+    asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+      const tenantId = req.auth?.tenantId;
+      if (!tenantId) return res.status(401).json({ error: { kind: 'Unauthorised' } });
+      const result = await module.deleteConversation({
+        tenantId,
+        conversationId: req.params.id,
+        reason: typeof req.body?.reason === 'string' && req.body.reason.trim() ? req.body.reason : 'user requested deletion',
+      });
+      if (!result.ok) return res.status(statusFor(result.error)).json({ error: result.error });
+      res.status(204).send();
+    }),
+  );
 
-  res.status(204).send();
-}));
+  return router;
+}
 
-// Add transcript entry to conversation
-router.post('/:id/transcript', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const { id } = req.params;
-  const { content, speaker }: { content: string; speaker?: string } = req.body;
-
-  if (!content || typeof content !== 'string') {
-    throw new ValidationError('Content is required and must be a string');
-  }
-
-  const conversationIndex = conversations.findIndex(c => c.id === id);
-  if (conversationIndex === -1) {
-    throw new NotFoundError('Conversation not found');
-  }
-
-  // Add transcript entry
-  conversations[conversationIndex].transcript.push(content);
-  conversations[conversationIndex].updatedAt = new Date();
-
-  logger.info('Transcript entry added', {
-    conversationId: id,
-    userId: user.id,
-    transcriptLength: conversations[conversationIndex].transcript.length,
-  });
-
-  res.status(201).json({
-    sequenceNumber: conversations[conversationIndex].transcript.length - 1,
-    content,
-    speaker: speaker || 'Unknown',
-    timestamp: new Date(),
-  });
-}));
-
-export default router;
+export default createConversationsRouter;

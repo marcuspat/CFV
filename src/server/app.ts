@@ -21,7 +21,8 @@ import { setupWebSocket } from './services/websocket';
 import healthRoutes from './routes/health';
 import { createAuthRouter } from './routes/auth';
 import { buildIdentityModule, type IdentityModule } from './composition/identity';
-import conversationRoutes from './routes/conversations';
+import { createConversationsRouter } from './routes/conversations';
+import { buildConversationModule } from './composition/conversation-ingestion';
 import analysisRoutes from './routes/analysis';
 import visualizationRoutes from './routes/visualization';
 import exportRoutes from './routes/export';
@@ -158,7 +159,17 @@ class App {
     }
 
     // Protected routes (auth required)
-    this.app.use('/api/conversations', authMiddleware, conversationRoutes);
+    if (this.identity) {
+      try {
+        const conversationModule = buildConversationModule();
+        this.app.use('/api/conversations', authMiddleware, createConversationsRouter(conversationModule));
+        logger.info('Conversation module initialized (PostgreSQL-backed)');
+      } catch (error) {
+        logger.warn('Conversation module unavailable', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     this.app.use('/api/analysis', authMiddleware, analysisRoutes);
     this.app.use('/api/visualizations', authMiddleware, visualizationRoutes);
     this.app.use('/api/exports', authMiddleware, exportRoutes);
