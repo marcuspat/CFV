@@ -23,7 +23,8 @@ import { createAuthRouter } from './routes/auth';
 import { buildIdentityModule, type IdentityModule } from './composition/identity';
 import { createConversationsRouter } from './routes/conversations';
 import { buildConversationModule } from './composition/conversation-ingestion';
-import analysisRoutes from './routes/analysis';
+import { createAnalysisRouter } from './routes/analysis';
+import { buildAnalysisModule } from './composition/cognitive-analysis';
 import visualizationRoutes from './routes/visualization';
 import exportRoutes from './routes/export';
 
@@ -163,14 +164,14 @@ class App {
       try {
         const conversationModule = buildConversationModule();
         this.app.use('/api/conversations', authMiddleware, createConversationsRouter(conversationModule));
-        logger.info('Conversation module initialized (PostgreSQL-backed)');
+        this.app.use('/api/analysis', authMiddleware, createAnalysisRouter(buildAnalysisModule()));
+        logger.info('Conversation + analysis modules initialized (PostgreSQL-backed)');
       } catch (error) {
         logger.warn('Conversation module unavailable', {
           error: error instanceof Error ? error.message : String(error),
         });
       }
     }
-    this.app.use('/api/analysis', authMiddleware, analysisRoutes);
     this.app.use('/api/visualizations', authMiddleware, visualizationRoutes);
     this.app.use('/api/exports', authMiddleware, exportRoutes);
 
