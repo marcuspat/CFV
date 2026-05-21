@@ -73,7 +73,7 @@ describe('AnalysisBundle aggregate', () => {
     const events = bundle.pullEvents();
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('BundleDraftCreated');
-    expect(events[0].payload.bundleVersion).toBe('1.0.0');
+    expect((events[0].payload as any).bundleVersion).toBe('1.0.0');
   });
 
   describe('promoteToShadow', () => {

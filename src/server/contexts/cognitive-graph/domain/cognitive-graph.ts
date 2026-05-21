@@ -36,6 +36,7 @@ import type {
   PredictedEdgeRealised,
   ThreadEvolved,
 } from './events';
+import { ConversationId } from './value-objects';
 import type {
   CognitiveElementId,
   Dimension,
@@ -53,7 +54,7 @@ import type {
 interface CognitiveGraphState {
   readonly id: GraphId;
   /** Mirrors ConversationId on the wire. */
-  readonly conversationId: GraphId;
+  readonly conversationId: ConversationId;
   readonly nodes: ReadonlyMap<CognitiveElementId, GraphNode>;
   readonly edges: ReadonlyMap<GraphEdgeId, GraphEdge>;
   readonly predictedEdges: ReadonlyMap<PredictedEdgeId, PredictedEdge>;
@@ -81,7 +82,7 @@ export class CognitiveGraph {
   static empty(args: { id: GraphId }): CognitiveGraph {
     return new CognitiveGraph({
       id: args.id,
-      conversationId: args.id,
+      conversationId: ConversationId.of(args.id),
       nodes: new Map(),
       edges: new Map(),
       predictedEdges: new Map(),

@@ -68,7 +68,7 @@ describe('MediaUpload aggregate', () => {
     expect(u.status).toBe('PROCESSED');
     const events = u.pullEvents();
     expect(events.map((e) => e.type)).toEqual(['MediaProcessed']);
-    expect(events[0].payload.durationMs).toBe(123);
+    expect((events[0].payload as any).durationMs).toBe(123);
   });
 
   it('refuses double-processing', () => {

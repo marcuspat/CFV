@@ -35,8 +35,8 @@ describe('User aggregate', () => {
     expect(events[0].type).toBe('UserRegistered');
     expect(events[0].payload.userId).toBe(USER);
     expect(events[0].payload.tenantId).toBe(TENANT);
-    expect(events[0].payload.email).toBe('alice@example.com');
-    expect(events[0].payload.roles).toEqual(['analyst']);
+    expect((events[0].payload as any).email).toBe('alice@example.com');
+    expect((events[0].payload as any).roles).toEqual(['analyst']);
   });
 
   it('drains events idempotently', () => {
@@ -66,8 +66,8 @@ describe('User aggregate', () => {
       const events = user.pullEvents();
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe('RolesChanged');
-      expect(events[0].payload.before).toEqual(['analyst']);
-      expect(events[0].payload.after).toEqual(['admin']);
+      expect((events[0].payload as any).before).toEqual(['analyst']);
+      expect((events[0].payload as any).after).toEqual(['admin']);
       expect(user.version).toBe(2);
     });
 
@@ -95,7 +95,7 @@ describe('User aggregate', () => {
       expect(user.version).toBe(2);
       const events = user.pullEvents();
       expect(events.map((e) => e.type)).toEqual(['UserDisabled']);
-      expect(events[0].payload.reason).toBe('compliance');
+      expect((events[0].payload as any).reason).toBe('compliance');
     });
 
     it('rejects a second disable', () => {

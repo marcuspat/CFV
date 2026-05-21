@@ -22,39 +22,13 @@ interface JWTPayload {
   exp?: number;
 }
 
-// Authentication middleware (TEMPORARILY DISABLED FOR TESTING)
+// Authentication middleware: verifies the Bearer JWT and attaches the user.
 export const authMiddleware = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    // TEMPORARY BYPASS FOR TESTING - Create mock user
-    req.user = {
-      id: 'test-user-123',
-      email: 'test@example.com',
-      role: UserRole.ADMIN,
-      username: 'testuser',
-      fullName: 'Test User',
-      preferences: {
-        theme: 'light',
-        language: 'en',
-        defaultVisualizationSettings: {
-          colorScheme: 'default',
-          animationEnabled: true,
-          detailLevel: 'detailed',
-        },
-        notifications: {
-          email: true,
-          browser: true,
-          processingComplete: true,
-          errors: true,
-        },
-      },
-      createdAt: new Date(),
-    };
-
-    /*
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
@@ -71,16 +45,14 @@ export const authMiddleware = async (
 
     // Verify JWT token
     const decoded = jwt.verify(token, config.JWT_SECRET) as JWTPayload;
-    */
 
-    /*
     // Add user info to request
     req.user = {
       id: decoded.userId,
       email: decoded.email,
       role: decoded.role,
-      username: '', // Will be populated from database if needed
-      fullName: '', // Will be populated from database if needed
+      username: '', // Populated from the data store when needed
+      fullName: '', // Populated from the data store when needed
       preferences: {
         theme: 'light',
         language: 'en',
@@ -98,20 +70,16 @@ export const authMiddleware = async (
       },
       createdAt: new Date(),
     };
-    */
 
     next();
   } catch (error) {
-    /*
-    if (error instanceof jwt.JsonWebTokenError) {
-      next(new AuthenticationError('Invalid token'));
-    } else if (error instanceof jwt.TokenExpiredError) {
+    if (error instanceof jwt.TokenExpiredError) {
       next(new AuthenticationError('Token expired'));
+    } else if (error instanceof jwt.JsonWebTokenError) {
+      next(new AuthenticationError('Invalid token'));
     } else {
       next(error);
     }
-    */
-    next(error);
   }
 };
 

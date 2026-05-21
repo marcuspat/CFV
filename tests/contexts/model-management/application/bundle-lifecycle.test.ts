@@ -215,7 +215,7 @@ describe('PromoteToActive', () => {
     const r = await s.promoteToActive.execute({ bundleVersion: '1.0.0' });
     expect(r.ok).toBe(false);
     expect(r.ok === false && r.error.kind).toBe('PreconditionFailed');
-    expect(r.ok === false && r.error.reason).toMatch(/insufficient/);
+    expect(r.ok === false && (r.error as any).reason).toMatch(/insufficient/);
   });
 
   it('promotes when policy approves and atomically RETIREs the displaced active', async () => {

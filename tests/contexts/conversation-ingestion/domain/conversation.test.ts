@@ -58,7 +58,7 @@ describe('Conversation aggregate', () => {
     const events = conv.pullEvents();
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('ConversationIngested');
-    expect(events[0].payload.turnCount).toBe(2);
+    expect((events[0].payload as any).turnCount).toBe(2);
   });
 
   it('rejects non-monotonic turn timestamps', () => {
@@ -111,8 +111,8 @@ describe('Conversation aggregate', () => {
       expect(conv.version).toBe(2);
       const events = conv.pullEvents();
       expect(events.map((e) => e.type)).toEqual(['ConversationSegmented']);
-      expect(events[0].payload.segmentCount).toBe(2);
-      expect(events[0].payload.segmentationSource).toBe('FALLBACK');
+      expect((events[0].payload as any).segmentCount).toBe(2);
+      expect((events[0].payload as any).segmentationSource).toBe('FALLBACK');
     });
 
     it('rejects boundaries that exceed the highest turn index', () => {
