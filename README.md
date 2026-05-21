@@ -8,18 +8,20 @@ The Cognitive Fabric Visualizer is an innovative tool that analyzes problem-solv
 
 **Input**: Complex problem-solving conversations (meetings, interviews, brainstorming sessions)
 
-**Analysis**: Decomposes reasoning into four cognitive dimensions:
-- 🔵 **Factual Retrieval** - Information and data sharing (92% accuracy)
-- 🟢 **Logical Inference** - Reasoning and conclusions (85% precision)
-- 🟣 **Creative Synthesis** - Novel ideas and innovations (0.60 ROUGE-L)
-- 🟠 **Meta-Cognition** - Self-reflection and strategy (0.96 F1-score)
+**Analysis**: Decomposes reasoning into four cognitive dimensions. The
+figures below are the project's **design targets** (see docs/adr), not yet
+independently validated against a benchmark dataset:
+- 🔵 **Factual Retrieval** - Information and data sharing (target: 92% accuracy)
+- 🟢 **Logical Inference** - Reasoning and conclusions (target: 85% precision)
+- 🟣 **Creative Synthesis** - Novel ideas and innovations (target: 0.60 ROUGE-L)
+- 🟠 **Meta-Cognition** - Self-reflection and strategy (target: 0.96 F1-score)
 
 **Output**: Interactive 3D visualizations showing how cognitive threads connect and evolve
 
 ## ✨ Key Features
 
 ### 🧠 Advanced Cognitive Analysis
-- **AI-Powered**: Ensemble of GPT-4 and Claude-3 for 95% precision
+- **AI-Powered**: Ensemble of frontier LLMs (target: 95% precision)
 - **Real-Time Processing**: Analyze conversations in under 10 seconds
 - **Multi-Modal Support**: Text, audio, and video input processing
 - **Confidence Scoring**: Transparent analysis with accuracy metrics
@@ -128,16 +130,20 @@ docker-compose up -d
 ### AI/ML
 - **OpenAI GPT-4** for advanced language understanding
 - **Anthropic Claude-3** for nuanced reasoning analysis
-- **Ensemble Methods** for 95% accuracy in cognitive detection
+- **Ensemble Methods** for high-accuracy cognitive detection
 - **Neuro-Symbolic AI** for explainable results
 
 ## 📊 Performance
 
-### Accuracy Metrics
-- **Factual Retrieval**: 92% accuracy with knowledge graph integration
-- **Logical Inference**: 85% precision with causal link identification
-- **Creative Synthesis**: 0.60 ROUGE-L with novelty detection
-- **Meta-Cognition**: 0.96 F1-score with multi-modal processing
+### Accuracy Targets
+
+These are the project's design targets and have not yet been independently
+validated against a benchmark dataset (no published eval artifacts exist).
+
+- **Factual Retrieval**: target 92% accuracy with knowledge graph integration
+- **Logical Inference**: target 85% precision with causal link identification
+- **Creative Synthesis**: target 0.60 ROUGE-L with novelty detection
+- **Meta-Cognition**: target 0.96 F1-score with multi-modal processing
 
 ### System Performance
 - **Processing Speed**: <10 seconds for complete analysis
