@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": false,
+    "sourceMap": true
+  },
+  "include": ["src/server/**/*", "src/types/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/client",
+    "src/server/services/monitoring",
+    "src/server/routes/monitoring.ts",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}
