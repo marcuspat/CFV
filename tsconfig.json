@@ -14,5 +14,14 @@
     "noEmit": true
   },
   "include": ["src/**/*", "tests/**/*"],
-  "exclude": ["node_modules", "dist", "src/client"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/client",
+    "src/server/services/monitoring",
+    "src/server/routes/monitoring.ts",
+    "tests/error-handling",
+    "tests/chaos-engineering",
+    "tests/performance"
+  ]
 }

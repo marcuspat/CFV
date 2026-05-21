@@ -414,5 +414,3 @@ export function getWebSocketService(): WebSocketService {
   }
   return wsService;
 }
-
-export default wsService || null;
