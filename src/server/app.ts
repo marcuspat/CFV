@@ -23,6 +23,9 @@ import { createAuthRouter } from './routes/auth';
 import { buildIdentityModule, type IdentityModule } from './composition/identity';
 import { createConversationsRouter } from './routes/conversations';
 import { buildConversationModule } from './composition/conversation-ingestion';
+import { createClient } from 'redis';
+import { PostgresOutboxReader } from './shared/outbox/postgres';
+import { OutboxRelay, RedisStreamPublisher } from './shared/outbox/relay';
 import { createAnalysisRouter } from './routes/analysis';
 import { buildAnalysisModule } from './composition/cognitive-analysis';
 import visualizationRoutes from './routes/visualization';
@@ -44,6 +47,8 @@ class App {
   public server: any;
   public wsServer?: WebSocketServer;
   private identity?: IdentityModule;
+  private outboxRelay?: OutboxRelay;
+  private redisClient?: ReturnType<typeof createClient>;
 
   constructor() {
     this.app = express();
@@ -172,6 +177,27 @@ class App {
         });
       }
     }
+
+    // Transactional-outbox relay (ADR-0012): publish domain events to Redis
+    // Streams. Degrades gracefully if Redis is unavailable.
+    if (this.identity) {
+      try {
+        this.redisClient = createClient({ url: config.REDIS_URL });
+        await this.redisClient.connect();
+        this.outboxRelay = new OutboxRelay(
+          new PostgresOutboxReader(),
+          new RedisStreamPublisher(this.redisClient as never),
+        );
+        this.outboxRelay.start();
+        logger.info('Outbox relay started (Redis Streams)');
+      } catch (error) {
+        logger.warn('Outbox relay unavailable; domain events will not be relayed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        this.redisClient = undefined;
+      }
+    }
+
     this.app.use('/api/visualizations', authMiddleware, visualizationRoutes);
     this.app.use('/api/exports', authMiddleware, exportRoutes);
 
@@ -289,9 +315,14 @@ class App {
             logger.info('WebSocket server closed');
           }
 
-          // Shutdown monitoring system (temporarily disabled)
-          // await shutdownMonitoring();
-          logger.info('Performance monitoring shutdown disabled');
+          // Stop the outbox relay and close Redis.
+          if (this.outboxRelay) {
+            this.outboxRelay.stop();
+          }
+          if (this.redisClient) {
+            await this.redisClient.quit();
+            logger.info('Outbox relay stopped, Redis closed');
+          }
 
           // Close database connections
           await database.close();

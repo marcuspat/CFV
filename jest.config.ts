@@ -44,7 +44,6 @@ const config: Config.InitialOptions = {
       'ts-jest',
       {
         tsconfig: 'tsconfig.json',
-        isolatedModules: true,
       },
     ],
   },
