@@ -11,6 +11,16 @@ import { User, UserRole } from '../../types';
 // Extend Request interface to include user
 export interface AuthenticatedRequest extends Request {
   user?: User;
+  auth?: AuthPrincipal;
+}
+
+/** The verified principal attached by authMiddleware (ADR-0007 claims). */
+export interface AuthPrincipal {
+  readonly userId: string;
+  readonly tenantId: string;
+  readonly roles: ReadonlyArray<string>;
+  readonly scopes: ReadonlyArray<string>;
+  readonly jti: string;
 }
 
 // JWT token payload interface
@@ -43,32 +53,15 @@ export const authMiddleware = async (
 
     const token = parts[1];
 
-    // Verify JWT token
-    const decoded = jwt.verify(token, config.JWT_SECRET) as JWTPayload;
-
-    // Add user info to request
-    req.user = {
-      id: decoded.userId,
-      email: decoded.email,
-      role: decoded.role,
-      username: '', // Populated from the data store when needed
-      fullName: '', // Populated from the data store when needed
-      preferences: {
-        theme: 'light',
-        language: 'en',
-        defaultVisualizationSettings: {
-          colorScheme: 'default',
-          animationEnabled: true,
-          detailLevel: 'detailed',
-        },
-        notifications: {
-          email: true,
-          browser: true,
-          processingComplete: true,
-          errors: true,
-        },
-      },
-      createdAt: new Date(),
+    // Verify the access token and attach the principal (ADR-0007 claims:
+    // sub/org/roles/scopes/jti). Issued by the Identity context's signer.
+    const decoded = jwt.verify(token, config.JWT_SECRET) as Record<string, unknown>;
+    req.auth = {
+      userId: String(decoded.sub ?? ''),
+      tenantId: String(decoded.org ?? ''),
+      roles: Array.isArray(decoded.roles) ? (decoded.roles as string[]) : [],
+      scopes: Array.isArray(decoded.scopes) ? (decoded.scopes as string[]) : [],
+      jti: String(decoded.jti ?? ''),
     };
 
     next();

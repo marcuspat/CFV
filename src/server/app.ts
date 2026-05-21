@@ -19,7 +19,8 @@ import { setupWebSocket } from './services/websocket';
 
 // Route imports
 import healthRoutes from './routes/health';
-import authRoutes from './routes/auth';
+import { createAuthRouter } from './routes/auth';
+import { buildIdentityModule, type IdentityModule } from './composition/identity';
 import conversationRoutes from './routes/conversations';
 import analysisRoutes from './routes/analysis';
 import visualizationRoutes from './routes/visualization';
@@ -40,6 +41,7 @@ class App {
   public app: Application;
   public server: any;
   public wsServer?: WebSocketServer;
+  private identity?: IdentityModule;
 
   constructor() {
     this.app = express();
@@ -141,8 +143,19 @@ class App {
     //   logger.error('Failed to load monitoring routes', { error });
     // }
 
-    // Authentication routes (no auth required)
-    this.app.use('/api/auth', authRoutes);
+    // Authentication routes (no auth required) — backed by the Identity
+    // context against PostgreSQL. Degrades gracefully if the DB is absent
+    // so the rest of the app can still boot in local/dev mode.
+    try {
+      this.identity = buildIdentityModule();
+      await this.identity.ensureDefaultTenant();
+      this.app.use('/api/auth', createAuthRouter(this.identity));
+      logger.info('Identity module initialized (PostgreSQL-backed auth)');
+    } catch (error) {
+      logger.warn('Identity module unavailable; auth routes disabled', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     // Protected routes (auth required)
     this.app.use('/api/conversations', authMiddleware, conversationRoutes);
