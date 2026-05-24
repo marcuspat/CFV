@@ -1,239 +1,176 @@
-# Cognitive Fabric Visualizer
+# Cognitive Fabric Visualizer (CFV)
 
-**Transform complex conversations into interactive cognitive visualizations**
+**Analyze conversations into their cognitive components and persist the results via a production-hardened DDD API.**
 
-The Cognitive Fabric Visualizer is an innovative tool that analyzes problem-solving conversations and maps how different thinking processes weave together. Powered by advanced AI and machine learning, it reveals the hidden patterns of human reasoning in stunning interactive 3D visualizations.
+CFV is a TypeScript/Node.js backend system that ingests text conversations, segments them into turns, and classifies each segment across four cognitive dimensions: `FACTUAL_RETRIEVAL`, `LOGICAL_INFERENCE`, `CREATIVE_SYNTHESIS`, and `META_COGNITION`. The results are stored in PostgreSQL and exposed through a secured REST API with JWT authentication.
 
-## 🎯 What It Does
+## What It Does Today
 
-**Input**: Complex problem-solving conversations (meetings, interviews, brainstorming sessions)
+| Capability | Status |
+|---|---|
+| User registration and login (bcrypt + JWT + refresh tokens) | Working |
+| Conversation ingestion (text transcript or structured turns) | Working |
+| 7-stage cognitive analysis saga (heuristic classifier) | Working |
+| Transactional outbox → Redis Streams event relay | Working |
+| PostgreSQL persistence for all bounded contexts | Working |
+| WebSocket server (real-time push) | Working |
+| Cognitive-graph visualization (Neo4j) | Deferred — not wired |
+| ML-backed classifier (OpenAI/Anthropic ensemble) | Placeholder — heuristic only |
+| React 3D frontend | Separate package — independent dev server |
 
-**Analysis**: Decomposes reasoning into four cognitive dimensions. The
-figures below are the project's **design targets** (see docs/adr), not yet
-independently validated against a benchmark dataset:
-- 🔵 **Factual Retrieval** - Information and data sharing (target: 92% accuracy)
-- 🟢 **Logical Inference** - Reasoning and conclusions (target: 85% precision)
-- 🟣 **Creative Synthesis** - Novel ideas and innovations (target: 0.60 ROUGE-L)
-- 🟠 **Meta-Cognition** - Self-reflection and strategy (target: 0.96 F1-score)
+## Architecture
 
-**Output**: Interactive 3D visualizations showing how cognitive threads connect and evolve
+CFV follows Domain-Driven Design with hexagonal ports-and-adapters. Six bounded contexts live in `src/server/contexts/`:
 
-## ✨ Key Features
+```
+identity              – users, tenants, refresh tokens
+conversation-ingestion – conversations, turns, analysis sessions
+multimodal            – media uploads and processing jobs
+model-management      – analysis bundles, shadow deployments
+cognitive-analysis    – analysis aggregate, 7-stage saga
+cognitive-graph       – graph nodes and edges (Neo4j, deferred)
+```
 
-### 🧠 Advanced Cognitive Analysis
-- **AI-Powered**: Ensemble of frontier LLMs (target: 95% precision)
-- **Real-Time Processing**: Analyze conversations in under 10 seconds
-- **Multi-Modal Support**: Text, audio, and video input processing
-- **Confidence Scoring**: Transparent analysis with accuracy metrics
+All contexts share:
+- **`src/server/shared/db/pool.ts`** — PostgreSQL pool + `AsyncLocalStorage`-based Unit of Work (`withTransaction` / `getQueryable`)
+- **`src/server/shared/outbox/`** — Transactional outbox pattern (ADR-0012): domain events written in the same transaction as aggregates, relayed to Redis Streams
 
-### 🎨 Interactive Visualizations
-- **3D Cognitive Maps**: Navigate thinking patterns in 3D space
-- **Temporal Playback**: Watch reasoning evolve over time
-- **Dynamic Filtering**: Focus on specific cognitive dimensions
-- **Export Options**: PNG, SVG, and interactive HTML formats
+Composition roots in `src/server/composition/` wire repositories, use cases, and infrastructure adapters and return typed module objects that the Express router layer consumes.
 
-### 📊 Actionable Insights
-- **Pattern Recognition**: Identify recurring thinking patterns
-- **Team Dynamics**: Understand collaborative problem-solving
-- **Innovation Tracking**: Spot creative breakthrough moments
-- **Decision Analysis**: Trace how conclusions are reached
+### Live HTTP Routes
 
-## 🚀 Quick Start
+```
+GET  /health                      – liveness check (no auth)
+GET  /                            – API manifest (no auth)
+
+POST /api/auth/register           – create account
+POST /api/auth/login              – obtain JWT + refresh token
+POST /api/auth/refresh            – rotate refresh token
+POST /api/auth/logout             – revoke refresh token
+GET  /api/auth/me                 – current user (auth required)
+
+POST /api/conversations           – ingest conversation transcript
+GET  /api/conversations           – list conversations for tenant
+GET  /api/conversations/:id       – fetch single conversation
+DELETE /api/conversations/:id     – delete conversation
+
+POST /api/analysis/start          – start analysis saga on a conversation
+GET  /api/analysis/:id/status     – poll saga stage
+GET  /api/analysis/:id/result     – fetch analysis summary
+```
+
+## Quick Start
 
 ### Prerequisites
-- Node.js 18+ and Python 3.10+
-- PostgreSQL, Neo4j, and Redis databases
-- OpenAI and Anthropic API keys
 
-### Installation
+- Node.js 18+
+- PostgreSQL 14+ (for auth, conversations, analysis)
+- Redis 6+ (for event relay — optional, degrades gracefully)
+
+### Environment Variables
 
 ```bash
-# Clone the repository
-git clone https://github.com/marcuspat/CFV.git
-cd CFV
+# Required
+JWT_SECRET=<at-least-32-character-random-string>
 
+# PostgreSQL (defaults below work with a local PG on port 5432)
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=cognitive_fabric
+DB_USER=postgres
+DB_PASSWORD=password
+
+# Optional — Redis for event relay
+REDIS_URL=redis://localhost:6379
+
+# Optional — ML pipeline (not yet integrated; system works without them)
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+```
+
+### Development
+
+```bash
 # Install dependencies
 npm install
-cd src/client && npm install && cd ../..
 
-# Setup databases
-sudo apt install postgresql neo4j redis-server
-# (see detailed installation guide below)
+# Type check
+npx tsc --noEmit
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your API keys and database settings
-
-# Start all services
-npm run dev:all
-```
-
-**Access the application**: [http://localhost:3000](http://localhost:3000)
-
-### Docker Installation (Recommended)
-
-```bash
-# Quick start with all services
-git clone https://github.com/marcuspat/CFV.git
-cd CFV
-cp .env.example .env
-# Edit .env with your settings
-docker-compose up -d
-```
-
-## 📖 Documentation
-
-### User Guides
-- [**Installation Guide**](docs/INSTALLATION_GUIDE.md) - Complete setup instructions
-- [**User Guide**](docs/USER_GUIDE.md) - How to use all features
-- [**API Reference**](docs/API_REFERENCE.md) - Developer API documentation
-
-### Technical Documentation
-- [**Architecture Guide**](docs/ARCHITECTURE_GUIDE.md) - System architecture overview
-- [**Contributing Guide**](docs/CONTRIBUTING.md) - Development setup
-- [**Troubleshooting**](docs/TROUBLESHOOTING.md) - Common issues and solutions
-
-## 🎯 Use Cases
-
-### 📊 Business & Strategy
-- **Meeting Analysis**: Understand team decision-making patterns
-- **Innovation Workshops**: Track creative idea development
-- **Strategic Planning**: Visualize reasoning behind strategic choices
-- **Process Improvement**: Identify bottlenecks in problem-solving
-
-### 🎓 Education & Research
-- **Learning Analytics**: Track student reasoning development
-- **Research Analysis**: Map academic discourse patterns
-- **Collaborative Learning**: Study group problem-solving dynamics
-- **Critical Thinking**: Assess reasoning quality and complexity
-
-### 👥 Team Collaboration
-- **Remote Meetings**: Enhance virtual collaboration insights
-- **Design Thinking**: Map creative process flows
-- **Agile Retrospectives**: Analyze team reflection patterns
-- **Cross-Functional Teams**: Understand diverse thinking approaches
-
-## 🔧 Technology Stack
-
-### Frontend
-- **React 18** with TypeScript for robust UI development
-- **Three.js** for high-performance 3D visualizations (120-240 FPS)
-- **D3.js** for complex network rendering
-- **WebSocket** for real-time updates
-
-### Backend
-- **Express.js** REST API with comprehensive security
-- **PostgreSQL** for structured data storage
-- **Neo4j** for graph-based cognitive relationships
-- **Redis** for high-performance caching
-
-### AI/ML
-- **OpenAI GPT-4** for advanced language understanding
-- **Anthropic Claude-3** for nuanced reasoning analysis
-- **Ensemble Methods** for high-accuracy cognitive detection
-- **Neuro-Symbolic AI** for explainable results
-
-## 📊 Performance
-
-### Accuracy Targets
-
-These are the project's design targets and have not yet been independently
-validated against a benchmark dataset (no published eval artifacts exist).
-
-- **Factual Retrieval**: target 92% accuracy with knowledge graph integration
-- **Logical Inference**: target 85% precision with causal link identification
-- **Creative Synthesis**: target 0.60 ROUGE-L with novelty detection
-- **Meta-Cognition**: target 0.96 F1-score with multi-modal processing
-
-### System Performance
-- **Processing Speed**: <10 seconds for complete analysis
-- **Visualization Performance**: 120-240 FPS on modern hardware
-- **Concurrent Users**: 100+ simultaneous users
-- **API Response**: <100ms for 95% of queries
-
-## 🎨 Visualization Examples
-
-### Cognitive Fabric Map
-![Cognitive Fabric Visualization](docs/images/cognitive-fabric-example.png)
-*Interactive 3D visualization showing how different cognitive threads connect during problem-solving*
-
-### Temporal Evolution
-![Temporal Analysis](docs/images/temporal-evolution.png)
-*Timeline view showing how reasoning patterns evolve throughout a conversation*
-
-### Team Dynamics
-![Team Analysis](docs/images/team-dynamics.png)
-*Comparative view of cognitive patterns across team members*
-
-## 🛡️ Security & Privacy
-
-- **Data Encryption**: All data encrypted in transit and at rest
-- **API Security**: JWT authentication with role-based access control
-- **Privacy First**: Optional data anonymization and local processing
-- **Compliance**: GDPR-ready with configurable data retention policies
-
-## 🤝 Contributing
-
-We welcome contributions! See our [Contributing Guide](docs/CONTRIBUTING.md) for:
-
-- Development setup instructions
-- Code style and testing requirements
-- Pull request process
-- Issue reporting guidelines
-
-### Quick Development Setup
-```bash
-# Clone repository
-git clone https://github.com/marcuspat/CFV.git
-cd CFV
-
-# Install development dependencies
-npm install
-npm run dev:setup
-
-# Run tests
-npm test
-npm run test:coverage
+# Run all unit tests (no DB required)
+npx jest
 
 # Start development server
 npm run dev
 ```
 
-## 📄 License
+### Running with a Database
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+```bash
+# Apply DDL (run once per schema; paths relative to project root)
+psql "$DATABASE_URL" -f src/server/contexts/identity/infrastructure/ddl/0001_identity.sql
+psql "$DATABASE_URL" -f src/server/contexts/conversation-ingestion/infrastructure/ddl/0001_conversation_ingestion.sql
+psql "$DATABASE_URL" -f src/server/contexts/multimodal/infrastructure/ddl/0001_multimodal.sql
+psql "$DATABASE_URL" -f src/server/contexts/model-management/infrastructure/ddl/0001_model_management.sql
+psql "$DATABASE_URL" -f src/server/contexts/cognitive-analysis/infrastructure/ddl/0001_cognitive_analysis.sql
+psql "$DATABASE_URL" -f src/server/shared/outbox/ddl/0001_domain_event_outbox.sql
 
-## 🙏 Acknowledgments
+# Start server
+npm run dev
+```
 
-- **OpenAI** for GPT-4 language models
-- **Anthropic** for Claude-3 reasoning capabilities
-- **Neo4j** for graph database technology
-- **Three.js** for 3D visualization framework
-- Our research partners and beta testers
+### Production Build
 
-## 📞 Support
+```bash
+npm run build          # emits CommonJS to dist/
+node dist/server/index.js
+```
 
-### Get Help
-- **Documentation**: See our comprehensive [User Guide](docs/USER_GUIDE.md)
-- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/marcuspat/CFV/issues)
-- **Community**: Join our [Discord Server](https://discord.gg/cfv) for user discussions
-- **Email**: Contact support@cfv.dev for enterprise inquiries
+### Integration Tests (requires live PG + Redis)
 
-### Demo Account
-Try the demo with these credentials:
-- **Username**: `demo@cfv.dev`
-- **Password**: `demo123`
+```bash
+RUN_DB_TESTS=1 \
+  TEST_DATABASE_URL=postgresql://postgres@localhost:5432/cfv_test \
+  TEST_REDIS_URL=redis://localhost:6379 \
+  npx jest --testPathPattern=integration --runInBand
+```
 
----
+## Test Status
 
-## 🌟 Transform Your Conversations Today
+```
+Unit tests (no DB):   316 passing, 61 skipped (integration suites, gated)
+Integration tests:     61 passing (10 suites, requires RUN_DB_TESTS=1)
+Type check:            0 errors
+Production build:      clean
+```
 
-**Cognitive Fabric Visualizer turns dialogue into insight.**
+## Documentation
 
-See what your teams are really thinking, how ideas connect, and where innovation happens.
+| Document | Description |
+|---|---|
+| [docs/USE_CASE_GUIDE.md](docs/USE_CASE_GUIDE.md) | What CFV is for and how to get value from it |
+| [docs/BUILD_VERIFICATION.md](docs/BUILD_VERIFICATION.md) | Recorded command inputs and outputs proving the system works |
+| [docs/adr/](docs/adr/) | Architectural Decision Records (ADR-0001 through ADR-0016) |
+| [docs/ddd/](docs/ddd/) | Domain model, bounded context maps, ubiquitous language |
+| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | API endpoint reference |
+| [docs/ARCHITECTURE_GUIDE.md](docs/ARCHITECTURE_GUIDE.md) | System architecture deep dive |
 
-**[Get Started Now →](docs/INSTALLATION_GUIDE.md)**
+## Honest Capability Statement
 
----
+The analysis engine currently uses a **heuristic ensemble** (`FakeLanguageModelClient`) that classifies cognitive dimensions from keyword and pattern matching. It is explicitly labelled a placeholder. The four dimension accuracy figures in earlier project documents (92%, 85%, 0.60 ROUGE-L, 0.96 F1) are **design targets**, not measured results.
 
-*Built with ❤️ for advancing understanding of human reasoning and collaboration*
+Replacing the heuristic with a real ML model (OpenAI/Anthropic API calls or a local model) is the primary remaining work item. The infrastructure — ingestion pipeline, 7-stage saga, PostgreSQL persistence, Redis event relay — is production-hardened and ready to accept a real classifier.
+
+## Technology Stack
+
+- **Runtime**: Node.js 22, TypeScript 5
+- **Web framework**: Express 4 with helmet, cors, compression, express-rate-limit
+- **Persistence**: PostgreSQL 14+ (via `pg` pool), Redis 6+ (via `node-redis` v4)
+- **Auth**: bcryptjs, jsonwebtoken (HS256), ULID-based IDs (Crockford base32)
+- **Real-time**: WebSocket (`ws`)
+- **Testing**: Jest + ts-jest, supertest
+- **Build**: tsc → CommonJS dist
+
+## License
+
+ISC
