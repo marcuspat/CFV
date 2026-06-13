@@ -1,431 +1,146 @@
 /**
- * Cognitive analysis routes
+ * Cognitive analysis routes — real LLM + PostgreSQL persistence
  */
-
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { asyncHandler, ValidationError, NotFoundError, CognitiveProcessingError } from '../middleware/errorHandler';
 import { AuthenticatedRequest } from '../middleware/auth';
-import {
-  CognitiveAnalysisResult,
-  StartAnalysisRequest,
-  StartAnalysisResponse,
-  GetAnalysisStatusResponse,
-  GetAnalysisResultResponse,
-  ProcessingMetrics,
-  CognitiveElement,
-  CognitiveDimension,
-  CognitiveGraph,
-  CognitiveMetrics,
-  ProcessingStatus
-} from '../../types';
+import { CognitiveAnalysisResult, StartAnalysisRequest, StartAnalysisResponse, GetAnalysisStatusResponse, GetAnalysisResultResponse, ProcessingStatus } from '../../types';
 import { logger } from '../utils/logger';
+import { analyzeConversation, isAIProviderConfigured } from '../services/cognitiveAnalysis';
+import database from '../config/database';
 
 const router = Router();
 
-// Mock analysis storage (in production, use database)
+// --- DB helpers ---
+async function dbQuery(sql: string, params: unknown[] = []) {
+    const pool = (database as any).getPool?.();
+    if (!pool) throw new Error('PostgreSQL not connected');
+    return pool.query(sql, params);
+}
+
+async function getJobFromDB(id: string, userId: string) {
+    try {
+          const res = await dbQuery('SELECT * FROM analysis_jobs WHERE id = $1 AND user_id = $2', [id, userId]);
+          return res.rows[0] ?? null;
+    } catch { return null; }
+}
+
+async function persistJob(job: { id: string; conversationId: string; userId: string; status: string; progress: number; currentStep: string; estimatedTimeRemaining: number }) {
+    try {
+          await dbQuery(
+                  'INSERT INTO analysis_jobs (id, conversation_id, user_id, status, progress, current_step, estimated_time_remaining, started_at) VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())',
+                  [job.id, job.conversationId, job.userId, job.status, job.progress, job.currentStep, job.estimatedTimeRemaining]
+                );
+    } catch (err) { logger.warn('Failed to persist job to DB', { err: String(err) }); }
+}
+
+async function patchJob(id: string, fields: Record<string, unknown>) {
+    const keys = Object.keys(fields);
+    if (!keys.length) return;
+    const snake = (s: string) => s.replace(/[A-Z]/g, l => `_${l.toLowerCase()}`);
+    const set = keys.map((k, i) => `${snake(k)} = $${i + 2}`).join(', ');
+    const vals = keys.map(k => { const v = fields[k]; return v instanceof Date ? v.toISOString() : v; });
+    try { await dbQuery(`UPDATE analysis_jobs SET ${set} WHERE id = $1`, [id, ...vals]); }
+    catch (err) { logger.warn('Failed to patch job', { id, err: String(err) }); }
+}
+
+// --- In-memory fallback ---
 interface AnalysisJob {
-  id: string;
-  conversationId: string;
-  userId: string;
-  status: ProcessingStatus;
-  progress: number;
-  currentStep: string;
-  estimatedTimeRemaining?: number;
-  startedAt: Date;
-  completedAt?: Date;
-  result?: CognitiveAnalysisResult;
-  error?: string;
+    id: string; conversationId: string; userId: string;
+    status: ProcessingStatus; progress: number; currentStep: string;
+    estimatedTimeRemaining?: number; startedAt: Date; completedAt?: Date;
+    result?: CognitiveAnalysisResult; error?: string;
+}
+const memJobs: AnalysisJob[] = [];
+
+async function resolveJob(id: string, userId: string): Promise<AnalysisJob | null> {
+    const row = await getJobFromDB(id, userId);
+    if (row) return { id: row.id, conversationId: row.conversation_id, userId: row.user_id, status: row.status, progress: row.progress, currentStep: row.current_step, estimatedTimeRemaining: row.estimated_time_remaining, startedAt: new Date(row.started_at), completedAt: row.completed_at ? new Date(row.completed_at) : undefined, result: row.result ? (typeof row.result === 'string' ? JSON.parse(row.result) : row.result) : undefined, error: row.error };
+    return memJobs.find(j => j.id === id && j.userId === userId) ?? null;
 }
 
-const analysisJobs: AnalysisJob[] = [];
-
-// Start cognitive analysis
+// --- Routes ---
 router.post('/start', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const { conversationId, options }: StartAnalysisRequest = req.body;
+    const user = req.user!;
+    const { conversationId, conversationText, options } = req.body as StartAnalysisRequest & { conversationText?: string };
+    if (!conversationId) throw new ValidationError('conversationId is required');
+    if (!isAIProviderConfigured()) throw new CognitiveProcessingError('No AI provider configured. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.');
 
-  if (!conversationId) {
-    throw new ValidationError('Conversation ID is required');
-  }
+                                     const inFlight = memJobs.find(j => j.conversationId === conversationId && j.status === ProcessingStatus.PROCESSING);
+    if (inFlight) throw new ValidationError('Analysis already running for this conversation');
 
-  // Check if analysis is already running
-  const existingJob = analysisJobs.find(
-    job => job.conversationId === conversationId &&
-    job.status === ProcessingStatus.PROCESSING
-  );
+                                     const analysisId = uuidv4();
+    const job: AnalysisJob = { id: analysisId, conversationId, userId: user.id, status: ProcessingStatus.PROCESSING, progress: 0, currentStep: 'Queued', estimatedTimeRemaining: 30, startedAt: new Date() };
+    memJobs.push(job);
+    await persistJob({ id: job.id, conversationId: job.conversationId, userId: job.userId, status: job.status, progress: job.progress, currentStep: job.currentStep, estimatedTimeRemaining: job.estimatedTimeRemaining! });
 
-  if (existingJob) {
-    throw new ValidationError('Analysis is already running for this conversation');
-  }
+                                     logger.info('Analysis job created', { analysisId, conversationId, userId: user.id });
+    processAnalysis(job, conversationText ?? `Conversation ID: ${conversationId}`).catch(e => logger.error('processAnalysis error', { analysisId, e: String(e) }));
 
-  // Create new analysis job
-  const analysisId = uuidv4();
-  const job: AnalysisJob = {
-    id: analysisId,
-    conversationId,
-    userId: user.id,
-    status: ProcessingStatus.PROCESSING,
-    progress: 0,
-    currentStep: 'Initializing analysis...',
-    estimatedTimeRemaining: 60, // 1 minute estimate
-    startedAt: new Date(),
-  };
-
-  analysisJobs.push(job);
-
-  logger.info('Analysis started', {
-    analysisId,
-    conversationId,
-    userId: user.id,
-    options,
-  });
-
-  // Start processing asynchronously (mock)
-  setTimeout(() => processAnalysis(job), 1000);
-
-  const response: StartAnalysisResponse = {
-    analysisId,
-    status: job.status,
-    estimatedDuration: job.estimatedTimeRemaining!,
-  };
-
-  res.status(202).json(response);
+                                     res.status(202).json({ analysisId, status: job.status, estimatedDuration: job.estimatedTimeRemaining } as StartAnalysisResponse);
 }));
 
-// Get analysis status
 router.get('/:id/status', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const { id } = req.params;
-
-  const job = analysisJobs.find(j => j.id === id && j.userId === user.id);
-  if (!job) {
-    throw new NotFoundError('Analysis job not found');
-  }
-
-  const response: GetAnalysisStatusResponse = {
-    analysisId: job.id,
-    status: job.status,
-    progress: job.progress,
-    currentStep: job.currentStep,
-    estimatedTimeRemaining: job.estimatedTimeRemaining,
-    errors: job.error ? [job.error] : undefined,
-  };
-
-  res.json(response);
+    const job = await resolveJob(req.params.id, req.user!.id);
+    if (!job) throw new NotFoundError('Analysis job not found');
+    res.json({ analysisId: job.id, status: job.status, progress: job.progress, currentStep: job.currentStep, estimatedTimeRemaining: job.estimatedTimeRemaining, errors: job.error ? [job.error] : undefined } as GetAnalysisStatusResponse);
 }));
 
-// Get analysis result
 router.get('/:id/result', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const { id } = req.params;
-
-  const job = analysisJobs.find(j => j.id === id && j.userId === user.id);
-  if (!job) {
-    throw new NotFoundError('Analysis job not found');
-  }
-
-  if (job.status !== ProcessingStatus.COMPLETED) {
-    throw new ValidationError('Analysis not completed yet');
-  }
-
-  if (!job.result) {
-    throw new ValidationError('Analysis result not available');
-  }
-
-  const response: GetAnalysisResultResponse = {
-    analysisId: job.id,
-    conversationId: job.conversationId,
-    result: job.result,
-    processingMetrics: job.result.metrics as any, // Simplified for demo
-  };
-
-  res.json(response);
+    const job = await resolveJob(req.params.id, req.user!.id);
+    if (!job) throw new NotFoundError('Analysis job not found');
+    if (job.status !== ProcessingStatus.COMPLETED) throw new ValidationError('Analysis not completed yet');
+    if (!job.result) throw new ValidationError('Result not available');
+    res.json({ analysisId: job.id, conversationId: job.conversationId, result: job.result, processingMetrics: job.result.metrics } as GetAnalysisResultResponse);
 }));
 
-// Cancel analysis
 router.post('/:id/cancel', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user!;
-  const { id } = req.params;
-
-  const jobIndex = analysisJobs.findIndex(j => j.id === id && j.userId === user.id);
-  if (jobIndex === -1) {
-    throw new NotFoundError('Analysis job not found');
-  }
-
-  const job = analysisJobs[jobIndex];
-
-  if (job.status === ProcessingStatus.COMPLETED) {
-    throw new ValidationError('Cannot cancel completed analysis');
-  }
-
-  if (job.status === ProcessingStatus.FAILED) {
-    throw new ValidationError('Analysis already failed');
-  }
-
-  // Cancel the job
-  job.status = ProcessingStatus.FAILED;
-  job.error = 'Analysis cancelled by user';
-  job.completedAt = new Date();
-
-  logger.info('Analysis cancelled', {
-    analysisId: job.id,
-    conversationId: job.conversationId,
-    userId: user.id,
-  });
-
-  res.json({
-    message: 'Analysis cancelled successfully',
-    analysisId: job.id,
-    status: job.status,
-  });
+    const job = await resolveJob(req.params.id, req.user!.id);
+    if (!job) throw new NotFoundError('Analysis job not found');
+    if (job.status === ProcessingStatus.COMPLETED) throw new ValidationError('Cannot cancel completed analysis');
+    if (job.status === ProcessingStatus.FAILED) throw new ValidationError('Analysis already failed');
+    const patch = { status: ProcessingStatus.FAILED, error: 'Cancelled by user', completedAt: new Date() };
+    const mem = memJobs.find(j => j.id === job.id);
+    if (mem) Object.assign(mem, patch);
+    await patchJob(job.id, patch);
+    logger.info('Analysis cancelled', { analysisId: job.id, userId: req.user!.id });
+    res.json({ message: 'Analysis cancelled', analysisId: job.id, status: ProcessingStatus.FAILED });
 }));
 
-// Mock analysis processing function
-async function processAnalysis(job: AnalysisJob): Promise<void> {
-  try {
-    const steps = [
-      { name: 'Processing conversation transcript...', duration: 10 },
-      { name: 'Extracting factual retrieval elements...', duration: 15 },
-      { name: 'Analyzing logical inference patterns...', duration: 15 },
-      { name: 'Identifying creative synthesis elements...', duration: 15 },
-      { name: 'Detecting meta-cognitive indicators...', duration: 15 },
-      { name: 'Generating cognitive graph...', duration: 10 },
-      { name: 'Creating visualizations...', duration: 10 },
-      { name: 'Finalizing analysis...', duration: 10 },
-    ];
+// --- Processing pipeline ---
+async function step(job: AnalysisJob, s: string, p: number, eta?: number) {
+    job.currentStep = s; job.progress = p;
+    if (eta !== undefined) job.estimatedTimeRemaining = eta;
+    await patchJob(job.id, { currentStep: s, progress: p, estimatedTimeRemaining: eta ?? job.estimatedTimeRemaining });
+    logger.debug('Analysis step', { analysisId: job.id, s, p });
+}
 
-    let totalProgress = 0;
+async function processAnalysis(job: AnalysisJob, conversationText: string): Promise<void> {
+    try {
+          await step(job, 'Extracting conversation context...', 5, 30);
+          await new Promise(r => setTimeout(r, 100));
+          await step(job, 'Calling AI cognitive analysis engine...', 15, 25);
 
-    for (const step of steps) {
-      // Update current step
-      job.currentStep = step.name;
-      job.estimatedTimeRemaining = steps
-        .slice(steps.indexOf(step))
-        .reduce((acc, s) => acc + s.duration, 0);
+      const result = await analyzeConversation(job.conversationId, conversationText);
 
-      // Simulate processing time
-      await new Promise(resolve => setTimeout(resolve, step.duration * 100));
+      await step(job, 'Building cognitive graph...', 70, 5);
+          await step(job, 'Persisting results...', 85, 3);
 
-      // Update progress
-      totalProgress += 100 / steps.length;
-      job.progress = Math.round(totalProgress);
+      try {
+              await dbQuery('UPDATE analysis_jobs SET result=$1,status=$2,progress=100,current_step=$3,completed_at=NOW() WHERE id=$4',
+                                    [JSON.stringify(result), ProcessingStatus.COMPLETED, 'Analysis complete', job.id]);
+      } catch (dbErr) { logger.warn('Could not persist result to DB', { dbErr: String(dbErr) }); }
 
-      logger.debug('Analysis progress', {
-        analysisId: job.id,
-        progress: job.progress,
-        currentStep: job.currentStep,
-      });
+      job.result = result; job.status = ProcessingStatus.COMPLETED;
+          job.progress = 100; job.currentStep = 'Analysis complete'; job.completedAt = new Date();
+          logger.info('Analysis completed', { analysisId: job.id, elementCount: result.elements.length, durationMs: job.completedAt.getTime() - job.startedAt.getTime() });
+    } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          job.status = ProcessingStatus.FAILED; job.error = msg; job.completedAt = new Date();
+          await patchJob(job.id, { status: ProcessingStatus.FAILED, error: msg, completedAt: new Date() });
+          logger.error('Analysis failed', { analysisId: job.id, error: msg });
     }
-
-    // Generate mock analysis result
-    job.result = generateMockAnalysisResult(job.conversationId);
-    job.status = ProcessingStatus.COMPLETED;
-    job.completedAt = new Date();
-    job.progress = 100;
-    job.currentStep = 'Analysis completed';
-
-    logger.info('Analysis completed', {
-      analysisId: job.id,
-      conversationId: job.conversationId,
-      duration: job.completedAt.getTime() - job.startedAt.getTime(),
-    });
-
-  } catch (error) {
-    job.status = ProcessingStatus.FAILED;
-    job.error = error instanceof Error ? error.message : 'Unknown error';
-    job.completedAt = new Date();
-
-    logger.error('Analysis failed', {
-      analysisId: job.id,
-      conversationId: job.conversationId,
-      error: job.error,
-    });
-  }
-}
-
-function generateMockAnalysisResult(conversationId: string): CognitiveAnalysisResult {
-  const now = new Date();
-
-  // Generate mock cognitive elements
-  const elements: CognitiveElement[] = [
-    {
-      id: uuidv4(),
-      type: CognitiveDimension.FACTUAL_RETRIEVAL,
-      content: 'The user mentioned specific data points about cognitive processing',
-      confidence: 0.92,
-      timestamp: new Date(now.getTime() - 5000),
-      position: { x: 0, y: 0, z: 0 },
-      connections: ['elem-2', 'elem-3'],
-    },
-    {
-      id: uuidv4(),
-      type: CognitiveDimension.LOGICAL_INFERENCE,
-      content: 'Logical progression from premise to conclusion detected',
-      confidence: 0.85,
-      timestamp: new Date(now.getTime() - 4000),
-      position: { x: 10, y: 5, z: -2 },
-      connections: ['elem-1', 'elem-4'],
-    },
-    {
-      id: uuidv4(),
-      type: CognitiveDimension.CREATIVE_SYNTHESIS,
-      content: 'Novel combination of ideas forming new insights',
-      confidence: 0.72,
-      timestamp: new Date(now.getTime() - 3000),
-      position: { x: -5, y: 8, z: 3 },
-      connections: ['elem-2', 'elem-4'],
-    },
-    {
-      id: uuidv4(),
-      type: CognitiveDimension.META_COGNITION,
-      content: 'Self-reflection on the reasoning process identified',
-      confidence: 0.96,
-      timestamp: new Date(now.getTime() - 2000),
-      position: { x: 3, y: -6, z: 1 },
-      connections: ['elem-1', 'elem-3'],
-    },
-  ];
-
-  // Generate mock cognitive graph
-  const graph: CognitiveGraph = {
-    nodes: elements.map((element, index) => ({
-      id: element.id,
-      position: element.position!,
-      mass: 1,
-      radius: 5 + element.confidence * 5,
-      element,
-      color: getElementColor(element.type),
-      opacity: 0.8 + element.confidence * 0.2,
-    })),
-    edges: [
-      {
-        id: uuidv4(),
-        source: elements[0].id,
-        target: elements[1].id,
-        strength: 0.8,
-        type: 'logical' as any,
-        animated: true,
-        color: '#4CAF50',
-      },
-      {
-        id: uuidv4(),
-        source: elements[1].id,
-        target: elements[2].id,
-        strength: 0.6,
-        type: 'causal' as any,
-        animated: false,
-        color: '#2196F3',
-      },
-      {
-        id: uuidv4(),
-        source: elements[2].id,
-        target: elements[3].id,
-        strength: 0.7,
-        type: 'semantic' as any,
-        animated: true,
-        color: '#FF9800',
-      },
-    ],
-    metrics: {
-      nodeCount: elements.length,
-      edgeCount: 3,
-      density: 0.5,
-      clusteringCoefficient: 0.67,
-      averagePathLength: 2.1,
-      modularity: 0.45,
-    },
-  };
-
-  // Generate mock metrics
-  const metrics: CognitiveMetrics = {
-    overall: {
-      factual_retrieval: 0.92,
-      logical_inference: 0.85,
-      creative_synthesis: 0.72,
-      meta_cognition: 0.96,
-    },
-    byDimension: {
-      [CognitiveDimension.FACTUAL_RETRIEVAL]: {
-        confidence: 0.92,
-        consistency: 0.88,
-        accuracy: 0.91,
-      },
-      [CognitiveDimension.LOGICAL_INFERENCE]: {
-        confidence: 0.85,
-        consistency: 0.82,
-        precision: 0.87,
-      },
-      [CognitiveDimension.CREATIVE_SYNTHESIS]: {
-        confidence: 0.72,
-        consistency: 0.68,
-        noveltyScore: 0.75,
-      },
-      [CognitiveDimension.META_COGNITION]: {
-        confidence: 0.96,
-        consistency: 0.94,
-        selfAwareness: 0.97,
-      },
-    },
-    temporalEvolution: [
-      {
-        timestamp: new Date(now.getTime() - 10000),
-        cognitiveLoad: 0.6,
-        dimensionActivity: {
-          [CognitiveDimension.FACTUAL_RETRIEVAL]: 0.8,
-          [CognitiveDimension.LOGICAL_INFERENCE]: 0.4,
-          [CognitiveDimension.CREATIVE_SYNTHESIS]: 0.2,
-          [CognitiveDimension.META_COGNITION]: 0.3,
-        },
-        complexityScore: 0.65,
-      },
-      {
-        timestamp: new Date(now.getTime() - 5000),
-        cognitiveLoad: 0.8,
-        dimensionActivity: {
-          [CognitiveDimension.FACTUAL_RETRIEVAL]: 0.6,
-          [CognitiveDimension.LOGICAL_INFERENCE]: 0.9,
-          [CognitiveDimension.CREATIVE_SYNTHESIS]: 0.7,
-          [CognitiveDimension.META_COGNITION]: 0.5,
-        },
-        complexityScore: 0.78,
-      },
-    ],
-    confidenceDistribution: {
-      high: 2,
-      medium: 2,
-      low: 0,
-    },
-  };
-
-  return {
-    conversationId,
-    elements,
-    graph,
-    metrics,
-    visualizations: [], // Would be generated separately
-    explainability: {
-      featureImportance: [],
-      decisionPaths: [],
-      modelExplanations: [],
-      userFeedback: [],
-    },
-  };
-}
-
-function getElementColor(dimension: CognitiveDimension): string {
-  switch (dimension) {
-    case CognitiveDimension.FACTUAL_RETRIEVAL:
-      return '#4CAF50'; // Green
-    case CognitiveDimension.LOGICAL_INFERENCE:
-      return '#2196F3'; // Blue
-    case CognitiveDimension.CREATIVE_SYNTHESIS:
-      return '#FF9800'; // Orange
-    case CognitiveDimension.META_COGNITION:
-      return '#9C27B0'; // Purple
-    default:
-      return '#757575'; // Gray
-  }
 }
 
 export default router;
