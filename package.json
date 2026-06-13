@@ -69,6 +69,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",
+    "@types/d3": "^7.4.3",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.14",
     "@types/joi": "^17.2.3",
@@ -77,6 +78,7 @@
     "@types/node": "^24.9.0",
     "@types/pg": "^8.10.9",
     "@types/supertest": "^2.0.16",
+    "@types/three": "^0.184.1",
     "@types/uuid": "^9.0.7",
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^6.11.0",
@@ -132,6 +134,6 @@
     "three": "^0.158.0",
     "uuid": "^9.0.1",
     "ws": "^8.18.3",
-    "zod": "^4.1.12"
+    "zod": "^3.23.8"
   }
 }

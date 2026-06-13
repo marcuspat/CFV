@@ -5,7 +5,7 @@
 
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import request from 'supertest';
-import { App } from '../../src/server/app';
+import App from '../../src/server/app.js';
 import {
   ValidationError,
   AuthenticationError,
@@ -32,7 +32,7 @@ describe('Comprehensive Error Handling Tests', () => {
   describe('Input Validation Errors', () => {
     describe('API Endpoint Input Validation', () => {
       test('should handle invalid JSON in request body', async () => {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .set('Content-Type', 'application/json')
           .send('{"invalid": json}');
@@ -44,7 +44,7 @@ describe('Comprehensive Error Handling Tests', () => {
       });
 
       test('should handle missing required fields', async () => {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .send({}); // Empty body missing required fields
 
@@ -53,7 +53,7 @@ describe('Comprehensive Error Handling Tests', () => {
       });
 
       test('should handle invalid data types', async () => {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .send({
             title: 123, // Should be string
@@ -66,7 +66,7 @@ describe('Comprehensive Error Handling Tests', () => {
       });
 
       test('should handle out-of-range values', async () => {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/analysis')
           .send({
             confidence: 1.5, // Should be 0-1
@@ -89,7 +89,7 @@ describe('Comprehensive Error Handling Tests', () => {
         ];
 
         for (const input of maliciousInputs) {
-          const response = await request(app.getExpressApp())
+          const response = await request(app.app)
             .post('/api/conversations')
             .send({
               title: input,
@@ -116,7 +116,7 @@ describe('Comprehensive Error Handling Tests', () => {
         ];
 
         for (const input of unicodeInputs) {
-          const response = await request(app.getExpressApp())
+          const response = await request(app.app)
             .post('/api/conversations')
             .send({
               title: input,
@@ -134,7 +134,7 @@ describe('Comprehensive Error Handling Tests', () => {
           metadata: Array(100000).fill({ item: 'data'.repeat(100) })
         };
 
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .send(largePayload)
           .timeout(30000);
@@ -143,7 +143,7 @@ describe('Comprehensive Error Handling Tests', () => {
       });
 
       test('should handle null and undefined values', async () => {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .send({
             title: null,
@@ -161,7 +161,7 @@ describe('Comprehensive Error Handling Tests', () => {
       test('should reject files exceeding size limit', async () => {
         const largeBuffer = Buffer.alloc(1024 * 1024 * 200); // 200MB
 
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/upload')
           .attach('file', largeBuffer, 'large-file.txt');
 
@@ -177,7 +177,7 @@ describe('Comprehensive Error Handling Tests', () => {
         ];
 
         for (const file of maliciousFiles) {
-          const response = await request(app.getExpressApp())
+          const response = await request(app.app)
             .post('/api/upload')
             .attach('file', file.content, file.name);
 
@@ -188,7 +188,7 @@ describe('Comprehensive Error Handling Tests', () => {
       test('should handle corrupted file uploads', async () => {
         const corruptedContent = Buffer.from([0xFF, 0xFE, 0xFD, 0xFC, 0xFB]);
 
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/upload')
           .attach('file', corruptedContent, 'corrupted.bin');
 
@@ -204,7 +204,7 @@ describe('Comprehensive Error Handling Tests', () => {
       process.env.DB_HOST = 'nonexistent-host';
 
       try {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .get('/api/conversations');
 
         expect([500, 503]).toContain(response.status);
@@ -216,7 +216,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
     test('should handle database query timeouts', async () => {
       // Mock long-running query
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/conversations')
         .query({ timeout: 100 });
 
@@ -230,14 +230,14 @@ describe('Comprehensive Error Handling Tests', () => {
       };
 
       // First request should succeed
-      const firstResponse = await request(app.getExpressApp())
+      const firstResponse = await request(app.app)
         .post('/api/conversations')
         .send(duplicateData);
 
       expect([200, 201]).toContain(firstResponse.status);
 
       // Second request with same ID should fail
-      const secondResponse = await request(app.getExpressApp())
+      const secondResponse = await request(app.app)
         .post('/api/conversations')
         .send(duplicateData);
 
@@ -246,7 +246,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
     test('should handle database connection pool exhaustion', async () => {
       const promises = Array(100).fill(null).map(() =>
-        request(app.getExpressApp()).get('/api/conversations')
+        request(app.app).get('/api/conversations')
       );
 
       const responses = await Promise.all(promises);
@@ -259,7 +259,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
   describe('Network Errors', () => {
     test('should handle request timeouts', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis')
         .send({ data: 'A'.repeat(1000000) }) // Large payload
         .timeout(1000);
@@ -272,11 +272,11 @@ describe('Comprehensive Error Handling Tests', () => {
       const response = await request('http://localhost:9999')
         .get('/api/health');
 
-      expect(response.status).toBeECONNREFUSED;
+      expect(response.status).toBeGreaterThanOrEqual(400);
     });
 
     test('should handle DNS resolution failures', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/external-service')
         .send({ url: 'http://nonexistent-domain-12345.com/api' });
 
@@ -290,7 +290,7 @@ describe('Comprehensive Error Handling Tests', () => {
       };
 
       const startTime = Date.now();
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis')
         .send(slowData)
         .timeout(30000);
@@ -303,7 +303,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
   describe('Authentication and Authorization Errors', () => {
     test('should handle missing authentication tokens', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/auth/profile');
 
       expect(response.status).toBe(401);
@@ -321,7 +321,7 @@ describe('Comprehensive Error Handling Tests', () => {
       ];
 
       for (const token of invalidTokens) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .get('/api/auth/profile')
           .set('Authorization', `Bearer ${token}`);
 
@@ -333,7 +333,7 @@ describe('Comprehensive Error Handling Tests', () => {
     test('should handle expired authentication tokens', async () => {
       const expiredToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZXhwIjoxNjE2MjM5MDIyfQ.invalid';
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/auth/profile')
         .set('Authorization', `Bearer ${expiredToken}`);
 
@@ -343,14 +343,14 @@ describe('Comprehensive Error Handling Tests', () => {
 
     test('should handle insufficient permissions', async () => {
       // Authenticate as regular user
-      const authResponse = await request(app.getExpressApp())
+      const authResponse = await request(app.app)
         .post('/api/auth/login')
         .send({ username: 'user', password: 'password' });
 
       const token = authResponse.body.token;
 
       // Try to access admin endpoint
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .delete('/api/admin/users/123')
         .set('Authorization', `Bearer ${token}`);
 
@@ -360,7 +360,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
     test('should handle concurrent authentication attempts', async () => {
       const promises = Array(10).fill(null).map(() =>
-        request(app.getExpressApp())
+        request(app.app)
           .post('/api/auth/login')
           .send({ username: 'test', password: 'wrong-password' })
       );
@@ -381,7 +381,7 @@ describe('Comprehensive Error Handling Tests', () => {
         })
       };
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis')
         .send(memoryIntensiveData);
 
@@ -395,7 +395,7 @@ describe('Comprehensive Error Handling Tests', () => {
         complexity: 'exponential'
       };
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis')
         .send(cpuIntensiveTask)
         .timeout(60000);
@@ -405,7 +405,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
     test('should handle connection limit exhaustion', async () => {
       const connections = Array(1000).fill(null).map((_, index) =>
-        request(app.getExpressApp())
+        request(app.app)
           .get('/api/health')
           .set('Connection', `keep-alive-${index}`)
       );
@@ -419,7 +419,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
     test('should handle rate limiting', async () => {
       const requests = Array(100).fill(null).map(() =>
-        request(app.getExpressApp()).get('/api/health')
+        request(app.app).get('/api/health')
       );
 
       const responses = await Promise.all(requests);
@@ -439,7 +439,7 @@ describe('Comprehensive Error Handling Tests', () => {
       delete process.env.JWT_SECRET;
 
       try {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .get('/api/health');
 
         expect([500, 503]).toContain(response.status);
@@ -453,7 +453,7 @@ describe('Comprehensive Error Handling Tests', () => {
       process.env.NODE_ENV = 'invalid-env';
 
       try {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .get('/api/health');
 
         expect([500, 400]).toContain(response.status);
@@ -468,7 +468,7 @@ describe('Comprehensive Error Handling Tests', () => {
       process.env.DB_PORT = '99999';
 
       try {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .get('/api/conversations');
 
         expect([500, 503]).toContain(response.status);
@@ -481,7 +481,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
   describe('External Service Dependencies', () => {
     test('should handle external API timeouts', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis/external')
         .send({
           service: 'slow-api',
@@ -492,7 +492,7 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should handle external API failures', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis/external')
         .send({
           service: 'failing-api',
@@ -504,7 +504,7 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should handle external API rate limiting', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis/external')
         .send({
           service: 'rate-limited-api',
@@ -515,7 +515,7 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should handle malformed external API responses', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis/external')
         .send({
           service: 'malformed-response-api',
@@ -529,7 +529,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
   describe('Boundary Conditions', () => {
     test('should handle zero values', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis')
         .send({
           confidence: 0,
@@ -542,7 +542,7 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should handle maximum values', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/analysis')
         .send({
           confidence: 1,
@@ -563,7 +563,7 @@ describe('Comprehensive Error Handling Tests', () => {
       ];
 
       for (const input of emptyInputs) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .send(input);
 
@@ -572,7 +572,7 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should handle single character inputs', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/conversations')
         .send({
           title: 'a',
@@ -590,7 +590,7 @@ describe('Comprehensive Error Handling Tests', () => {
       ];
 
       for (const date of boundaryDates) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .send({
             title: 'Test',
@@ -606,7 +606,7 @@ describe('Comprehensive Error Handling Tests', () => {
     test('should handle simultaneous requests to same resource', async () => {
       const resourceId = 'test-resource-123';
       const promises = Array(10).fill(null).map((_, index) =>
-        request(app.getExpressApp())
+        request(app.app)
           .put(`/api/conversations/${resourceId}`)
           .send({
             title: `Updated Title ${index}`,
@@ -628,7 +628,7 @@ describe('Comprehensive Error Handling Tests', () => {
       };
 
       const promises = Array(5).fill(null).map(() =>
-        request(app.getExpressApp())
+        request(app.app)
           .post('/api/conversations')
           .send(sameData)
       );
@@ -643,11 +643,11 @@ describe('Comprehensive Error Handling Tests', () => {
 
     test('should handle deadlocks', async () => {
       // Create competing transactions that could deadlock
-      const transaction1 = request(app.getExpressApp())
+      const transaction1 = request(app.app)
         .post('/api/transactions')
         .send({ resources: ['resource1', 'resource2'], operations: ['lock', 'update'] });
 
-      const transaction2 = request(app.getExpressApp())
+      const transaction2 = request(app.app)
         .post('/api/transactions')
         .send({ resources: ['resource2', 'resource1'], operations: ['lock', 'update'] });
 
@@ -673,7 +673,7 @@ describe('Comprehensive Error Handling Tests', () => {
       ];
 
       for (const json of malformedJsons) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .set('Content-Type', 'application/json')
           .send(json);
@@ -692,7 +692,7 @@ describe('Comprehensive Error Handling Tests', () => {
       ];
 
       for (const data of encodingIssues) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .set('Content-Type', 'application/json')
           .send(data);
@@ -704,7 +704,7 @@ describe('Comprehensive Error Handling Tests', () => {
     test('should handle truncated data', async () => {
       const incompleteData = '{"title":"Test","content":"This data is in'; // Missing closing brackets
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/conversations')
         .set('Content-Type', 'application/json')
         .send(incompleteData);
@@ -719,7 +719,7 @@ describe('Comprehensive Error Handling Tests', () => {
         metadata: { key: 'value\x00malicious' }
       };
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/conversations')
         .send(dataWithNulls);
 
@@ -733,7 +733,7 @@ describe('Comprehensive Error Handling Tests', () => {
       const responses = [];
 
       for (let i = 0; i < 10; i++) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .get('/api/health')
           .set('X-Simulate-Failure', i % 3 === 0 ? 'true' : 'false');
 
@@ -746,27 +746,27 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should handle partial service availability', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/health')
         .set('X-Service-Status', 'partial');
 
       expect([200, 503]).toContain(response.status);
       if (response.status === 200) {
         expect(response.body.services).toBeDefined();
-        expect(response.body.services.some(s => s.status !== 'connected')).toBe(true);
+        expect(response.body.services.some((s: any) => s.status !== 'connected')).toBe(true);
       }
     });
 
     test('should handle slow cascade failures', async () => {
       // First request triggers dependency failure
-      const firstResponse = await request(app.getExpressApp())
+      const firstResponse = await request(app.app)
         .post('/api/analysis/cascade')
         .send({ triggerFailure: true });
 
       // Subsequent requests should handle degraded state
       const subsequentResponses = await Promise.all(
         Array(5).fill(null).map(() =>
-          request(app.getExpressApp()).get('/api/health')
+          request(app.app).get('/api/health')
         )
       );
 
@@ -789,7 +789,7 @@ describe('Comprehensive Error Handling Tests', () => {
       ];
 
       for (const dateStr of timezoneDates) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .send({
             title: 'Timezone Test',
@@ -804,14 +804,14 @@ describe('Comprehensive Error Handling Tests', () => {
       const pastTimestamp = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(); // 1 hour ago
       const futureTimestamp = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(); // 1 hour from now
 
-      const pastResponse = await request(app.getExpressApp())
+      const pastResponse = await request(app.app)
         .post('/api/conversations')
         .send({
           title: 'Past Timestamp',
           createdAt: pastTimestamp
         });
 
-      const futureResponse = await request(app.getExpressApp())
+      const futureResponse = await request(app.app)
         .post('/api/conversations')
         .send({
           title: 'Future Timestamp',
@@ -832,7 +832,7 @@ describe('Comprehensive Error Handling Tests', () => {
       ];
 
       for (const date of boundaryDates) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/conversations')
           .send({
             title: 'Boundary Date Test',
@@ -852,7 +852,7 @@ describe('Comprehensive Error Handling Tests', () => {
       };
 
       const promises = Array(10).fill(null).map(() =>
-        request(app.getExpressApp())
+        request(app.app)
           .post('/api/conversations')
           .send(sameRequest)
       );
@@ -872,12 +872,12 @@ describe('Comprehensive Error Handling Tests', () => {
         content: 'Testing back button resubmission'
       };
 
-      const firstResponse = await request(app.getExpressApp())
+      const firstResponse = await request(app.app)
         .post('/api/conversations')
         .send(formData);
 
       // Simulate back button resubmission
-      const secondResponse = await request(app.getExpressApp())
+      const secondResponse = await request(app.app)
         .post('/api/conversations')
         .send({ ...formData, resubmitted: true });
 
@@ -888,7 +888,7 @@ describe('Comprehensive Error Handling Tests', () => {
     test('should handle session fixation attempts', async () => {
       const maliciousSessionId = 'malicious-session-id-123';
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/auth/profile')
         .set('Cookie', `sessionId=${maliciousSessionId}`);
 
@@ -896,7 +896,7 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should handle parameter pollution', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/conversations')
         .query({
           id: ['123', '456', '789'],
@@ -908,7 +908,7 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should handle HTTP method tampering', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/conversations')
         .set('X-HTTP-Method-Override', 'DELETE')
         .send({ id: '123' });
@@ -920,12 +920,12 @@ describe('Comprehensive Error Handling Tests', () => {
   describe('Error Recovery and Resilience', () => {
     test('should recover from temporary database failures', async () => {
       // Simulate temporary database failure
-      await request(app.getExpressApp())
+      await request(app.app)
         .post('/api/admin/simulate-db-failure')
         .send({ duration: 2000 });
 
       // Requests during failure should handle gracefully
-      const failResponse = await request(app.getExpressApp())
+      const failResponse = await request(app.app)
         .get('/api/conversations');
 
       expect([500, 503]).toContain(failResponse.status);
@@ -934,7 +934,7 @@ describe('Comprehensive Error Handling Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Requests after recovery should succeed
-      const recoverResponse = await request(app.getExpressApp())
+      const recoverResponse = await request(app.app)
         .get('/api/conversations');
 
       expect([200, 503]).toContain(recoverResponse.status);
@@ -943,7 +943,7 @@ describe('Comprehensive Error Handling Tests', () => {
     test('should implement circuit breaker pattern', async () => {
       // Trigger multiple failures to open circuit
       const failurePromises = Array(5).fill(null).map(() =>
-        request(app.getExpressApp())
+        request(app.app)
           .post('/api/external-service')
           .send({ service: 'failing-service' })
       );
@@ -951,7 +951,7 @@ describe('Comprehensive Error Handling Tests', () => {
       const failureResponses = await Promise.all(failurePromises);
 
       // Later requests should fail fast due to open circuit
-      const circuitOpenResponse = await request(app.getExpressApp())
+      const circuitOpenResponse = await request(app.app)
         .post('/api/external-service')
         .send({ service: 'any-service' });
 
@@ -959,7 +959,7 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should implement graceful degradation', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/health')
         .set('X-Simulate-Partial-Failure', 'true');
 
@@ -969,7 +969,7 @@ describe('Comprehensive Error Handling Tests', () => {
     });
 
     test('should provide fallback responses', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/conversations')
         .set('X-Fallback-Mode', 'true');
 
@@ -983,7 +983,7 @@ describe('Comprehensive Error Handling Tests', () => {
 
   describe('Error Logging and Monitoring', () => {
     test('should log errors with appropriate context', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/conversations')
         .send({ invalid: 'data' });
 
@@ -997,9 +997,9 @@ describe('Comprehensive Error Handling Tests', () => {
 
     test('should not leak sensitive information in error responses', async () => {
       const responses = [
-        await request(app.getExpressApp()).get('/api/nonexistent'),
-        await request(app.getExpressApp()).post('/api/conversations').send({}),
-        await request(app.getExpressApp()).get('/api/admin/system-info')
+        await request(app.app).get('/api/nonexistent'),
+        await request(app.app).post('/api/conversations').send({}),
+        await request(app.app).get('/api/admin/system-info')
       ];
 
       responses.forEach(response => {
@@ -1013,7 +1013,7 @@ describe('Comprehensive Error Handling Tests', () => {
     test('should provide correlation IDs for error tracking', async () => {
       const correlationId = 'test-correlation-123';
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/nonexistent')
         .set('X-Request-ID', correlationId);
 

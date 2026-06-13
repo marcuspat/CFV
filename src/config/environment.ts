@@ -16,7 +16,7 @@ const environmentSchema = z.object({
   DB_NAME: z.string().min(1, 'Database name is required'),
   DB_USER: z.string().min(1, 'Database user is required'),
   DB_PASSWORD: z.string().min(1, 'Database password is required'),
-  DB_SSL: z.enum(['true', 'false']).transform(val => val === 'true').default(false),
+  DB_SSL: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
 
   // Neo4j Configuration
   NEO4J_URI: z.string().url('Invalid Neo4j URI'),
@@ -75,12 +75,12 @@ const environmentSchema = z.object({
   LOG_FILE: z.string().optional(),
 
   // Analytics Configuration
-  ENABLE_ANALYTICS: z.enum(['true', 'false']).transform(val => val === 'true').default(false),
+  ENABLE_ANALYTICS: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
   ANALYTICS_API_KEY: z.string().optional(),
 
   // Development Configuration
-  ENABLE_MOCK_SERVICES: z.enum(['true', 'false']).transform(val => val === 'true').default(false),
-  ENABLE_DEBUG_ROUTES: z.enum(['true', 'false']).transform(val => val === 'true').default(false)
+  ENABLE_MOCK_SERVICES: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
+  ENABLE_DEBUG_ROUTES: z.enum(['true', 'false']).transform(val => val === 'true').default('false')
 });
 
 // Type for validated environment

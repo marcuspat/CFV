@@ -277,6 +277,7 @@ export class StressTestSuite {
 
       return new Promise((resolve) => {
         ws.on('open', () => {
+          let lastSendTime = performance.now();
           // Start sending messages
           const messageInterval = setInterval(() => {
             if (!this.isRunning || ws.readyState !== WebSocket.OPEN) {
@@ -284,24 +285,24 @@ export class StressTestSuite {
               return;
             }
 
-            const startTime = performance.now();
+            lastSendTime = performance.now();
             ws.send(JSON.stringify({
               type: 'ping',
               connectionId: connectionId,
               timestamp: Date.now()
             }));
 
-            metrics.requests++;
+            connectionMetrics.requests++;
           }, 1000); // Send message every second
 
-          ws.on('message', (data) => {
-            const duration = performance.now() - startTime;
-            metrics.responseTimes.push(duration);
+          ws.on('message', () => {
+            const duration = performance.now() - lastSendTime;
+            connectionMetrics.responseTimes.push(duration);
             this.metricsCollector.recordRequest(duration, false);
           });
 
-          ws.on('error', (error) => {
-            metrics.errors++;
+          ws.on('error', () => {
+            connectionMetrics.errors++;
             this.metricsCollector.recordRequest(0, true);
           });
 
@@ -313,8 +314,8 @@ export class StressTestSuite {
           });
         });
 
-        ws.on('error', (error) => {
-          metrics.errors++;
+        ws.on('error', () => {
+          connectionMetrics.errors++;
           connectionMetrics.endTime = performance.now();
           connectionMetrics.active = false;
           resolve();
@@ -743,6 +744,7 @@ export class StressTestSuite {
     for (let i = 0; i < 100; i++) {
       promises.push(
         axios.get(`${this.config.baseUrl}/health`, { timeout: 30000 })
+          .then(() => {})
           .catch(() => {}) // Ignore errors
       );
     }

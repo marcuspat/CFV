@@ -39,14 +39,14 @@ describe('Chaos Engineering Tests', () => {
         );
         console.log('\n📄 Reports saved to chaos-test-report.md and chaos-test-metrics.json');
       } catch (error) {
-        console.log('Could not save reports:', error.message);
+        console.log('Could not save reports:', (error as Error).message);
       }
     }
   }, 30000);
 
   describe('Service Resilience Tests', () => {
     test('should handle database connection failures gracefully', async () => {
-      const scenario = ChaosScenarios.databaseConnectionFailure();
+      const scenario = ChaosScenarios.databaseConnectionFailure(chaosFramework.getApp());
       const metrics = await chaosFramework.executeChaosTest(scenario);
 
       expect(metrics.impactLevel).toMatch(/low|medium|high|critical/);
@@ -60,7 +60,7 @@ describe('Chaos Engineering Tests', () => {
     }, 120000);
 
     test('should handle high load stress without complete failure', async () => {
-      const scenario = ChaosScenarios.highLoadStress();
+      const scenario = ChaosScenarios.highLoadStress(chaosFramework.getApp());
       const metrics = await chaosFramework.executeChaosTest(scenario);
 
       expect(metrics.impactLevel).toBeDefined();
@@ -71,7 +71,7 @@ describe('Chaos Engineering Tests', () => {
     }, 120000);
 
     test('should handle memory pressure scenarios', async () => {
-      const scenario = ChaosScenarios.memoryPressure();
+      const scenario = ChaosScenarios.memoryPressure(chaosFramework.getApp());
       const metrics = await chaosFramework.executeChaosTest(scenario);
 
       expect(metrics.impactLevel).toBeDefined();
@@ -81,7 +81,7 @@ describe('Chaos Engineering Tests', () => {
     }, 90000);
 
     test('should handle network partitions with circuit breakers', async () => {
-      const scenario = ChaosScenarios.networkPartition();
+      const scenario = ChaosScenarios.networkPartition(chaosFramework.getApp());
       const metrics = await chaosFramework.executeChaosTest(scenario);
 
       expect(metrics.impactLevel).toBeDefined();
@@ -92,7 +92,7 @@ describe('Chaos Engineering Tests', () => {
     }, 90000);
 
     test('should handle CPU saturation with graceful degradation', async () => {
-      const scenario = ChaosScenarios.cpuSaturation();
+      const scenario = ChaosScenarios.cpuSaturation(chaosFramework.getApp());
       const metrics = await chaosFramework.executeChaosTest(scenario);
 
       expect(metrics.impactLevel).toBeDefined();
@@ -114,7 +114,7 @@ describe('Chaos Engineering Tests', () => {
           for (let wave = 0; wave < 5; wave++) {
             const promises = Array(50).fill(null).map((_, index) =>
               chaosFramework['app'] &&
-              require('supertest')(chaosFramework['app'].getExpressApp())
+              require('supertest')(chaosFramework['app'].app)
                 .get('/api/conversations')
                 .query({ wave, index })
                 .timeout(5000)
@@ -129,7 +129,7 @@ describe('Chaos Engineering Tests', () => {
         resilienceChecks: [
           async () => {
             if (!chaosFramework['app']) return false;
-            const response = await require('supertest')(chaosFramework['app'].getExpressApp())
+            const response = await require('supertest')(chaosFramework['app'].app)
               .get('/api/health')
               .timeout(5000);
             return response.status === 200;
@@ -157,17 +157,17 @@ describe('Chaos Engineering Tests', () => {
 
           // Trigger multiple failure points
           const failures = [
-            require('supertest')(chaosFramework['app'].getExpressApp())
+            require('supertest')(chaosFramework['app'].app)
               .post('/api/admin/simulate-db-failure')
               .send({ duration: 5000 }),
 
-            require('supertest')(chaosFramework['app'].getExpressApp())
+            require('supertest')(chaosFramework['app'].app)
               .post('/api/admin/memory-stress')
               .send({ sizeMB: 100, duration: 5000 }),
 
             // Generate load during failures
             ...Array(20).fill(null).map(() =>
-              require('supertest')(chaosFramework['app'].getExpressApp())
+              require('supertest')(chaosFramework['app'].app)
                 .get('/api/conversations')
                 .timeout(10000)
             )
@@ -180,7 +180,7 @@ describe('Chaos Engineering Tests', () => {
         resilienceChecks: [
           async () => {
             if (!chaosFramework['app']) return false;
-            const response = await require('supertest')(chaosFramework['app'].getExpressApp())
+            const response = await require('supertest')(chaosFramework['app'].app)
               .get('/api/health')
               .timeout(5000);
             return response.status === 200;
@@ -209,14 +209,14 @@ describe('Chaos Engineering Tests', () => {
 
           // Exhaust file descriptors
           const fdPromises = Array(100).fill(null).map(() =>
-            require('supertest')(chaosFramework['app'].getExpressApp())
+            require('supertest')(chaosFramework['app'].app)
               .get('/api/health')
               .timeout(1000)
           );
 
           // Simulate memory pressure
           const memoryPromises = Array(5).fill(null).map(() =>
-            require('supertest')(chaosFramework['app'].getExpressApp())
+            require('supertest')(chaosFramework['app'].app)
               .post('/api/admin/memory-stress')
               .send({ sizeMB: 50, duration: 3000 })
           );
@@ -228,7 +228,7 @@ describe('Chaos Engineering Tests', () => {
         resilienceChecks: [
           async () => {
             if (!chaosFramework['app']) return false;
-            const response = await require('supertest')(chaosFramework['app'].getExpressApp())
+            const response = await require('supertest')(chaosFramework['app'].app)
               .get('/api/health')
               .timeout(10000);
             return response.status === 200;
@@ -250,9 +250,9 @@ describe('Chaos Engineering Tests', () => {
     test('should analyze chaos test patterns and identify weaknesses', async () => {
       // Run a subset of tests to analyze patterns
       const testSuite = [
-        ChaosScenarios.databaseConnectionFailure(),
-        ChaosScenarios.highLoadStress(),
-        ChaosScenarios.memoryPressure()
+        ChaosScenarios.databaseConnectionFailure(chaosFramework.getApp()),
+        ChaosScenarios.highLoadStress(chaosFramework.getApp()),
+        ChaosScenarios.memoryPressure(chaosFramework.getApp())
       ];
 
       const results = await chaosFramework.executeChaosSuite(testSuite);
@@ -287,7 +287,7 @@ describe('Chaos Engineering Tests', () => {
           // Simple operation that should succeed
           if (!chaosFramework['app']) throw new Error('App not initialized');
 
-          const response = await require('supertest')(chaosFramework['app'].getExpressApp())
+          const response = await require('supertest')(chaosFramework['app'].app)
             .get('/api/health')
             .timeout(5000);
 
@@ -347,7 +347,7 @@ describe('Chaos Engineering Tests', () => {
 
           while (Date.now() - startTime < duration) {
             const promises = Array(10).fill(null).map(() =>
-              require('supertest')(chaosFramework['app'].getExpressApp())
+              require('supertest')(chaosFramework['app'].app)
                 .get('/api/conversations')
                 .timeout(5000)
             );
@@ -361,7 +361,7 @@ describe('Chaos Engineering Tests', () => {
         resilienceChecks: [
           async () => {
             if (!chaosFramework['app']) return false;
-            const response = await require('supertest')(chaosFramework['app'].getExpressApp())
+            const response = await require('supertest')(chaosFramework['app'].app)
               .get('/api/health')
               .timeout(10000);
             return response.status === 200;

@@ -177,12 +177,12 @@ router.put('/:id', asyncHandler(async (req: AuthenticatedRequest, res: Response)
   }
 
   // Update allowed fields
-  const allowedFields = ['title', 'metadata'];
+  const allowedFields = ['title', 'metadata'] as const;
   const filteredUpdates: Partial<Conversation> = {};
 
   for (const field of allowedFields) {
     if (updates[field] !== undefined) {
-      filteredUpdates[field] = updates[field];
+      (filteredUpdates as Record<string, unknown>)[field] = updates[field];
     }
   }
 

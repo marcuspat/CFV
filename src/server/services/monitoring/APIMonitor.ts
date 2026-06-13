@@ -147,15 +147,16 @@ export class APIMonitor extends EventEmitter {
       const originalWrite = res.write;
       const originalEnd = res.end;
       let responseSize = 0;
+      const monitor = this;
 
-      res.write = function (chunk: any, encoding?: any) {
+      res.write = function (this: Response, chunk: any, encoding?: any) {
         if (chunk) {
           responseSize += Buffer.byteLength(chunk, encoding);
         }
         return originalWrite.call(this, chunk, encoding);
       };
 
-      res.end = function (chunk?: any, encoding?: any) {
+      res.end = function (this: Response, chunk?: any, encoding?: any) {
         if (chunk) {
           responseSize += Buffer.byteLength(chunk, encoding);
         }
@@ -170,23 +171,23 @@ export class APIMonitor extends EventEmitter {
         request.responseSize = responseSize;
 
         // Update metrics
-        this.updateMetrics(request);
+        monitor.updateMetrics(request);
 
         // Record metrics in collector
-        this.recordRequestMetrics(request);
+        monitor.recordRequestMetrics(request);
 
         // Check for slow requests
-        if (duration > this.config.thresholds.responseTime.warning) {
-          this.emit('slowRequest', request);
+        if (duration > monitor.config.thresholds.responseTime.warning) {
+          monitor.emit('slowRequest', request);
         }
 
         // Check for errors
         if (res.statusCode >= 400) {
-          this.emit('errorRequest', request);
+          monitor.emit('errorRequest', request);
         }
 
         return originalEnd.call(this, chunk, encoding);
-      }.bind(this);
+      };
 
       next();
     };
@@ -274,22 +275,27 @@ export class APIMonitor extends EventEmitter {
         filtered = filtered.filter(r => r.method === filters.method);
       }
       if (filters.path) {
-        filtered = filtered.filter(r => r.path.includes(filters.path));
+        const pathFilter = filters.path;
+        filtered = filtered.filter(r => r.path.includes(pathFilter));
       }
       if (filters.statusCode) {
         filtered = filtered.filter(r => r.statusCode === filters.statusCode);
       }
-      if (filters.minDuration) {
-        filtered = filtered.filter(r => r.duration && r.duration >= filters.minDuration);
+      if (filters.minDuration !== undefined) {
+        const minDur = filters.minDuration;
+        filtered = filtered.filter(r => r.duration && r.duration >= minDur);
       }
-      if (filters.maxDuration) {
-        filtered = filtered.filter(r => r.duration && r.duration <= filters.maxDuration);
+      if (filters.maxDuration !== undefined) {
+        const maxDur = filters.maxDuration;
+        filtered = filtered.filter(r => r.duration && r.duration <= maxDur);
       }
-      if (filters.startTime) {
-        filtered = filtered.filter(r => r.startTime >= filters.startTime);
+      if (filters.startTime !== undefined) {
+        const start = filters.startTime;
+        filtered = filtered.filter(r => r.startTime >= start);
       }
-      if (filters.endTime) {
-        filtered = filtered.filter(r => r.startTime <= filters.endTime);
+      if (filters.endTime !== undefined) {
+        const end = filters.endTime;
+        filtered = filtered.filter(r => r.startTime <= end);
       }
     }
 
@@ -348,15 +354,13 @@ export class APIMonitor extends EventEmitter {
     const oldest = relevantHistory[0];
     const newest = relevantHistory[relevantHistory.length - 1];
 
-    const calculateTrend = (oldValue: number, newValue: number, inverse: boolean = false) => {
-      if (oldValue === 0) return { trend: 'stable' as const, change: 0 };
+    const calculateTrend = (oldValue: number, newValue: number, inverse: boolean = false): { trend: 'up' | 'down' | 'stable'; change: number } => {
+      if (oldValue === 0) return { trend: 'stable', change: 0 };
       const change = ((newValue - oldValue) / oldValue) * 100;
-      return {
-        trend: Math.abs(change) > 10 ?
-          (inverse ? (change < 0 ? 'improving' : 'degrading') : (change > 0 ? 'improving' : 'degrading'))
-          : 'stable',
-        change
-      };
+      const trend: 'up' | 'down' | 'stable' = Math.abs(change) > 10 ?
+        (inverse ? (change < 0 ? 'up' : 'down') : (change > 0 ? 'up' : 'down'))
+        : 'stable';
+      return { trend, change };
     };
 
     return {

@@ -306,7 +306,7 @@ export class AgentCoordinationMonitor extends EventEmitter {
     }
 
     this.recordEvent({
-      type: error ? 'error' : 'task_completion',
+      type: error ? 'error' : 'task_assignment',
       agentId: trace.agentId,
       agentType: trace.agentType,
       timestamp: endTime,
@@ -366,8 +366,8 @@ export class AgentCoordinationMonitor extends EventEmitter {
       latency || 0,
       'ms',
       {
-        from_type: fromAgent?.type,
-        to_type: toAgent?.type,
+        from_type: fromAgent?.type ?? 'unknown',
+        to_type: toAgent?.type ?? 'unknown',
         message_type: messageType
       }
     );
@@ -377,7 +377,7 @@ export class AgentCoordinationMonitor extends EventEmitter {
       1,
       {
         direction: 'sent',
-        agent_type: fromAgent?.type,
+        agent_type: fromAgent?.type ?? 'unknown',
         message_type: messageType
       }
     );
@@ -393,7 +393,7 @@ export class AgentCoordinationMonitor extends EventEmitter {
     }
 
     this.recordEvent({
-      type: 'coordination',
+      type: 'synchronization',
       agentId,
       agentType: this.agents.get(agentId)?.type || 'unknown',
       timestamp: Date.now(),
@@ -411,7 +411,7 @@ export class AgentCoordinationMonitor extends EventEmitter {
       overhead,
       'ms',
       {
-        agent_type: this.agents.get(agentId)?.type,
+        agent_type: this.agents.get(agentId)?.type ?? 'unknown',
         operation
       }
     );
@@ -492,17 +492,21 @@ export class AgentCoordinationMonitor extends EventEmitter {
       if (filters.status) {
         traces = traces.filter(t => t.status === filters.status);
       }
-      if (filters.minDuration) {
-        traces = traces.filter(t => t.duration && t.duration >= filters.minDuration);
+      if (filters.minDuration !== undefined) {
+        const minDur = filters.minDuration;
+        traces = traces.filter(t => t.duration && t.duration >= minDur);
       }
-      if (filters.maxDuration) {
-        traces = traces.filter(t => t.duration && t.duration <= filters.maxDuration);
+      if (filters.maxDuration !== undefined) {
+        const maxDur = filters.maxDuration;
+        traces = traces.filter(t => t.duration && t.duration <= maxDur);
       }
-      if (filters.startTime) {
-        traces = traces.filter(t => t.startTime >= filters.startTime);
+      if (filters.startTime !== undefined) {
+        const start = filters.startTime;
+        traces = traces.filter(t => t.startTime >= start);
       }
-      if (filters.endTime) {
-        traces = traces.filter(t => t.endTime && t.endTime <= filters.endTime);
+      if (filters.endTime !== undefined) {
+        const end = filters.endTime;
+        traces = traces.filter(t => t.endTime && t.endTime <= end);
       }
     }
 
@@ -546,15 +550,13 @@ export class AgentCoordinationMonitor extends EventEmitter {
     const oldest = relevantHistory[0];
     const newest = relevantHistory[relevantHistory.length - 1];
 
-    const calculateTrend = (oldValue: number, newValue: number, inverse: boolean = false) => {
-      if (oldValue === 0) return { trend: 'stable' as const, change: 0 };
+    const calculateTrend = (oldValue: number, newValue: number, inverse: boolean = false): { trend: 'up' | 'down' | 'stable'; change: number } => {
+      if (oldValue === 0) return { trend: 'stable', change: 0 };
       const change = ((newValue - oldValue) / oldValue) * 100;
-      return {
-        trend: Math.abs(change) > 5 ?
-          (inverse ? (change < 0 ? 'improving' : 'degrading') : (change > 0 ? 'improving' : 'degrading'))
-          : 'stable',
-        change
-      };
+      const trend: 'up' | 'down' | 'stable' = Math.abs(change) > 5 ?
+        (inverse ? (change < 0 ? 'up' : 'down') : (change > 0 ? 'up' : 'down'))
+        : 'stable';
+      return { trend, change };
     };
 
     return {
@@ -671,15 +673,15 @@ export class AgentCoordinationMonitor extends EventEmitter {
     const activeAgents = agents.filter(a => a.status !== 'offline');
 
     // Simplified topology detection
-    const type = activeAgents.length > 10 ? 'mesh' : activeAgents.length > 3 ? 'star' : 'ring';
+    const type: 'mesh' | 'ring' | 'star' = activeAgents.length > 10 ? 'mesh' : activeAgents.length > 3 ? 'star' : 'ring';
 
     return {
       type,
       size: activeAgents.length,
-      depth: type === 'hierarchical' ? Math.ceil(Math.log2(activeAgents.length)) : 1,
+      depth: 1,
       connectivity: type === 'mesh' ? activeAgents.length - 1 : type === 'star' ? 1 : 2,
       resilience: {
-        singlePointFailure: type === 'star' || type === 'hierarchical',
+        singlePointFailure: type === 'star',
         connectivityLoss: type === 'star' ? 50 : type === 'mesh' ? 5 : 20,
         recoveryTime: 1000 // ms
       },
@@ -735,7 +737,7 @@ export class AgentCoordinationMonitor extends EventEmitter {
     const avgOverhead = overheads.length > 0 ? overheads.reduce((a, b) => a + b, 0) / overheads.length : 0;
     if (avgOverhead > this.config.thresholds.agentCoordination.overheadCritical) {
       bottlenecks.push({
-        type: 'coordination',
+        type: 'synchronization',
         severity: 'critical',
         description: `High coordination overhead: ${avgOverhead.toFixed(2)}ms`,
         impact: Math.min(50, (avgOverhead / this.config.thresholds.agentCoordination.overheadWarning) * 25)

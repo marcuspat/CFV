@@ -2,7 +2,8 @@
  * Comprehensive metrics collector for performance testing
  */
 
-import { performance, MemoryUsage, CpuUsage } from 'os';
+import os from 'os';
+import { performance } from 'perf_hooks';
 import { EventEmitter } from 'events';
 
 export interface PerformanceMetrics {

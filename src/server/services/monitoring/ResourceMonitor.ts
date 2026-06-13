@@ -222,10 +222,8 @@ export class ResourceMonitor extends EventEmitter {
 
     const calculateTrend = (oldValue: number, newValue: number) => {
       const change = ((newValue - oldValue) / oldValue) * 100;
-      return {
-        trend: Math.abs(change) > 5 ? (change > 0 ? 'up' : 'down') : 'stable',
-        change
-      };
+      const trend: 'up' | 'down' | 'stable' = Math.abs(change) > 5 ? (change > 0 ? 'up' : 'down') : 'stable';
+      return { trend, change };
     };
 
     return {

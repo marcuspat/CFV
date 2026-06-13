@@ -168,7 +168,7 @@ function buildResult(conversationId: string, llm: LLMAnalysisResult, start: Date
 
   return {
         conversationId, elements, graph, metrics, visualizations: [],
-        explainability: { featureImportance: [], decisionPaths: [], modelExplanations: [{ modelId: 'gpt-4o-or-claude-3-5-sonnet', explanation: llm.summary, confidence: (s.factual_retrieval + s.logical_inference + s.creative_synthesis + s.meta_cognition) / 4, features: [] }], userFeedback: [] },
+        explainability: { featureImportance: [], decisionPaths: [], modelExplanations: [{ model: 'gpt-4o-or-claude-3-5-sonnet', method: 'custom', explanation: llm.summary, fidelity: (s.factual_retrieval + s.logical_inference + s.creative_synthesis + s.meta_cognition) / 4 }], userFeedback: [] },
   };
 }
 

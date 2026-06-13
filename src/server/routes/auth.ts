@@ -254,12 +254,12 @@ router.put('/me', asyncHandler(async (req: AuthenticatedRequest, res: Response) 
   }
 
   // Update allowed fields
-  const allowedFields = ['fullName', 'preferences'];
+  const allowedFields = ['fullName', 'preferences'] as const;
   const filteredUpdates: Partial<User> = {};
 
   for (const field of allowedFields) {
     if (updates[field] !== undefined) {
-      filteredUpdates[field] = updates[field];
+      (filteredUpdates as Record<string, unknown>)[field] = updates[field];
     }
   }
 

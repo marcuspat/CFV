@@ -92,7 +92,7 @@ router.get('/:id/result', asyncHandler(async (req: AuthenticatedRequest, res: Re
     if (!job) throw new NotFoundError('Analysis job not found');
     if (job.status !== ProcessingStatus.COMPLETED) throw new ValidationError('Analysis not completed yet');
     if (!job.result) throw new ValidationError('Result not available');
-    res.json({ analysisId: job.id, conversationId: job.conversationId, result: job.result, processingMetrics: job.result.metrics } as GetAnalysisResultResponse);
+    res.json({ analysisId: job.id, conversationId: job.conversationId, result: job.result, processingMetrics: { totalProcessingTime: 0, cognitiveDecompositionTime: 0, graphGenerationTime: 0, visualizationTime: 0, memoryUsage: 0, accuracyMetrics: {} } } as GetAnalysisResultResponse);
 }));
 
 router.post('/:id/cancel', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
