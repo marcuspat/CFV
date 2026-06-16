@@ -61,11 +61,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Security audit
+        run: npm audit --audit-level=high
+
       - name: Run linter
         run: npm run lint
 
       - name: Run typecheck
         run: npm run typecheck
+
+      - name: Run database migrations
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d cfv_test -f migrations/001_analysis_jobs.sql
 
       - name: Install Playwright
         run: npx playwright install --with-deps chromium

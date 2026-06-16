@@ -1,9 +1,23 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Smoke tests', () => {
-  test('health endpoint returns 200', async ({ request }) => {
+  test('health endpoint returns 200 with healthy status', async ({ request }) => {
     const response = await request.get('http://localhost:3000/health');
     expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.status).toBe('healthy');
+    expect(body.version).toBe('1.0.0');
+    expect(typeof body.uptime).toBe('number');
+    expect(body.uptime).toBeGreaterThanOrEqual(0);
+    expect(body.timestamp).toBeTruthy();
+  });
+
+  test('health/live liveness probe returns alive', async ({ request }) => {
+    const response = await request.get('http://localhost:3000/health/live');
+    expect(response.status()).toBe(200);
+    const body = await response.json();
+    expect(body.status).toBe('alive');
+    expect(body.timestamp).toBeTruthy();
   });
 
   test('API root is reachable', async ({ request }) => {
