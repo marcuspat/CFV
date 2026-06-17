@@ -120,9 +120,20 @@ class App {
       logger.warn('Failed to load monitoring routes', { error });
     }
 
+    // Stricter rate limit for the expensive analysis pipeline: 10 req / 15 min.
+    const analysisLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: {
+        error: 'Too many analysis requests from this IP, please try again later.',
+      },
+    });
+
     this.app.use('/api/auth', authRoutes);
     this.app.use('/api/conversations', authMiddleware, conversationRoutes);
-    this.app.use('/api/analysis', authMiddleware, analysisRoutes);
+    this.app.use('/api/analysis', authMiddleware, analysisLimiter, analysisRoutes);
     this.app.use('/api/visualizations', authMiddleware, visualizationRoutes);
     this.app.use('/api/exports', authMiddleware, exportRoutes);
 

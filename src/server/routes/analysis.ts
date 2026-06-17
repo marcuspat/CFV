@@ -2,8 +2,10 @@
  * Cognitive analysis routes — real LLM + PostgreSQL persistence
  */
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { asyncHandler, ValidationError, NotFoundError, CognitiveProcessingError } from '../middleware/errorHandler';
+import { validateBody } from '../middleware/validate';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { CognitiveAnalysisResult, StartAnalysisRequest, StartAnalysisResponse, GetAnalysisStatusResponse, GetAnalysisResultResponse, ProcessingStatus } from '../../types';
 import { logger } from '../utils/logger';
@@ -60,8 +62,21 @@ async function resolveJob(id: string, userId: string): Promise<AnalysisJob | nul
     return memJobs.find(j => j.id === id && j.userId === userId) ?? null;
 }
 
+// --- Validation schemas ---
+const startAnalysisSchema = z.object({
+  conversationId: z.string().min(1, 'conversationId is required'),
+  conversationText: z.string().min(1).max(100000).optional(),
+  options: z
+    .object({
+      includeRealTime: z.boolean().optional(),
+      detailLevel: z.enum(['summary', 'detailed', 'comprehensive']).optional(),
+      customWeights: z.record(z.number()).optional(),
+    })
+    .optional(),
+});
+
 // --- Routes ---
-router.post('/start', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/start', validateBody(startAnalysisSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const user = req.user!;
     const { conversationId, conversationText, options } = req.body as StartAnalysisRequest & { conversationText?: string };
     if (!conversationId) throw new ValidationError('conversationId is required');

@@ -3,8 +3,10 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
+import { validateBody } from '../middleware/validate';
 import { AuthenticatedRequest } from '../middleware/auth';
 import {
   Conversation,
@@ -24,8 +26,23 @@ const router = Router();
 // Mock conversation storage (in production, use database)
 const conversations: Conversation[] = [];
 
+// --- Validation schemas ---
+const createConversationSchema = z.object({
+  title: z.string().min(1, 'title is required').max(500, 'title is too long'),
+  transcript: z
+    .array(z.string().min(1, 'transcript entries must be non-empty strings'))
+    .min(1, 'transcript must contain at least one entry'),
+  metadata: z
+    .object({
+      domain: z.string().max(200).optional(),
+      language: z.string().max(20).optional(),
+      tags: z.array(z.string().max(50)).max(50).optional(),
+    })
+    .optional(),
+});
+
 // Create new conversation
-router.post('/', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', validateBody(createConversationSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
   const { title, transcript, metadata }: CreateConversationRequest = req.body;
 

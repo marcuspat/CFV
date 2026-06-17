@@ -159,17 +159,24 @@ export function getServerConfig() {
         error: 'Too many requests from this IP, please try again later.',
       },
     },
-    helmet: isProduction() ? {
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
-          imgSrc: ["'self'", "data:", "https:"],
-          connectSrc: ["'self'", "ws:", "wss:"],
-        },
-      },
-    } : false,
+    // Helmet is always enabled for baseline security headers. The stricter
+    // Content-Security-Policy is only applied in production to avoid breaking
+    // the dev proxy / hot-reload; CORP is set to cross-origin so the separately
+    // hosted frontend can read API responses.
+    helmet: {
+      contentSecurityPolicy: isProduction()
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              styleSrc: ["'self'", "'unsafe-inline'"],
+              scriptSrc: ["'self'"],
+              imgSrc: ["'self'", 'data:', 'https:'],
+              connectSrc: ["'self'", 'ws:', 'wss:'],
+            },
+          }
+        : false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' as const },
+    },
   };
 }
 
