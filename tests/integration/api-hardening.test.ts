@@ -148,6 +148,33 @@ describe('Authentication (JWT + bcrypt)', () => {
     const reuse = await request(app).post('/api/auth/refresh').send({ refreshToken: rt });
     expect(reuse.status).toBe(401);
   });
+
+  it('persists the refresh token as an httpOnly cookie; cookie-based logout revokes it', async () => {
+    const agent = request.agent(app);
+
+    const login = await agent
+      .post('/api/auth/login')
+      .send({ email: creds.email, password: creds.password });
+    expect(login.status).toBe(200);
+
+    const setCookie = (login.headers['set-cookie'] as unknown as string[]) ?? [];
+    const cookieStr = setCookie.join(';');
+    expect(cookieStr).toMatch(/refresh_token=/);
+    expect(cookieStr.toLowerCase()).toContain('httponly');
+
+    // Refresh using only the cookie (empty body).
+    const refreshed = await agent.post('/api/auth/refresh').send({});
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.body.token).toBeTruthy();
+
+    // Logout via the cookie revokes the token and clears the cookie.
+    const out = await agent.post('/api/auth/logout').send({});
+    expect(out.status).toBe(200);
+
+    // The cookie is now cleared, so a cookie-only refresh is rejected.
+    const reuse = await agent.post('/api/auth/refresh').send({});
+    expect(reuse.status).toBe(401);
+  });
 });
 
 describe('API hardening — Zod input validation', () => {

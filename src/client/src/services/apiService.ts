@@ -35,6 +35,9 @@ class ApiService {
       // proxy (package.json "proxy") / a production reverse proxy to the backend.
       baseURL: process.env.REACT_APP_API_URL || '/api',
       timeout: 30000,
+      // Send/receive the httpOnly refresh_token cookie (same-origin via the
+      // dev proxy / prod reverse proxy; CORS credentials are enabled server-side).
+      withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
       },

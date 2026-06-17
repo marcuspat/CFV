@@ -9,6 +9,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
+import { config } from '../config';
 import {
   asyncHandler,
   ValidationError,
@@ -54,10 +55,6 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
-const refreshSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
-});
-
 /** Convert a JWT duration string ('7d', '24h', '15m', '30s') to milliseconds. */
 function durationToMs(d: string): number {
   const match = /^(\d+)\s*([smhd])?$/.exec(d.trim());
@@ -66,6 +63,38 @@ function durationToMs(d: string): number {
   const unit = match[2] ?? 's';
   const mult = unit === 'd' ? 86_400_000 : unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : 1_000;
   return n * mult;
+}
+
+// --- Refresh-token httpOnly cookie ---
+const REFRESH_COOKIE = 'refresh_token';
+const REFRESH_COOKIE_PATH = '/api/auth';
+
+/** Minimal single-cookie reader (avoids a cookie-parser dependency). */
+function readCookie(req: Request, name: string): string | undefined {
+  const header = req.headers.cookie;
+  if (!header) return undefined;
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === name) {
+      return decodeURIComponent(part.slice(idx + 1).trim());
+    }
+  }
+  return undefined;
+}
+
+function setRefreshCookie(res: Response, token: string): void {
+  res.cookie(REFRESH_COOKIE, token, {
+    httpOnly: true,
+    secure: config.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: REFRESH_COOKIE_PATH,
+    maxAge: durationToMs(config.JWT_REFRESH_EXPIRES_IN),
+  });
+}
+
+function clearRefreshCookie(res: Response): void {
+  res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
 }
 
 // Register a new user
@@ -95,6 +124,8 @@ router.post('/register', validateBody(registerSchema), asyncHandler(async (req: 
   logger.info('User registered', { userId: record.id, email: record.email, username: record.username });
 
   const tokens = generateTokens({ id: record.id, email: record.email, role: record.role });
+
+  setRefreshCookie(res, tokens.refreshToken);
 
   const response: AuthResponse = {
     user: toPublicUser(record),
@@ -126,6 +157,8 @@ router.post('/login', validateBody(loginSchema), asyncHandler(async (req: Reques
 
   const tokens = generateTokens({ id: record.id, email: record.email, role: record.role });
 
+  setRefreshCookie(res, tokens.refreshToken);
+
   const response: AuthResponse = {
     user: toPublicUser({ ...record, lastLoginAt: new Date() }),
     token: tokens.accessToken,
@@ -136,9 +169,14 @@ router.post('/login', validateBody(loginSchema), asyncHandler(async (req: Reques
   res.json(response);
 }));
 
-// Refresh access token (rotates both tokens)
-router.post('/refresh', validateBody(refreshSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { refreshToken } = req.body as { refreshToken: string };
+// Refresh access token (rotates both tokens). The refresh token is read from
+// the httpOnly cookie, falling back to the request body for non-browser clients.
+router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
+  const refreshToken =
+    readCookie(req, REFRESH_COOKIE) ?? (req.body?.refreshToken as string | undefined);
+  if (!refreshToken) {
+    throw new AuthenticationError('Refresh token is required');
+  }
 
   let userId: string;
   let jti: string | undefined;
@@ -159,6 +197,8 @@ router.post('/refresh', validateBody(refreshSchema), asyncHandler(async (req: Re
 
   const tokens = generateTokens({ id: record.id, email: record.email, role: record.role });
 
+  setRefreshCookie(res, tokens.refreshToken);
+
   res.json({
     token: tokens.accessToken,
     refreshToken: tokens.refreshToken,
@@ -166,9 +206,10 @@ router.post('/refresh', validateBody(refreshSchema), asyncHandler(async (req: Re
   });
 }));
 
-// Logout user — revokes the supplied refresh token so it cannot be reused.
+// Logout — revokes the refresh token (from cookie or body) and clears the cookie.
 router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
-  const { refreshToken } = (req.body ?? {}) as { refreshToken?: string };
+  const refreshToken =
+    readCookie(req, REFRESH_COOKIE) ?? ((req.body ?? {}) as { refreshToken?: string }).refreshToken;
 
   if (refreshToken) {
     try {
@@ -183,6 +224,7 @@ router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
     }
   }
 
+  clearRefreshCookie(res);
   logger.info('User logged out', { userId: (req as AuthenticatedRequest).user?.id });
   res.json({ message: 'Logged out successfully' });
 }));
