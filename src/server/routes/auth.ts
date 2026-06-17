@@ -1,279 +1,193 @@
 /**
- * Authentication routes for Cognitive Fabric Visualizer
+ * Authentication routes for Cognitive Fabric Visualizer.
+ *
+ * Real implementation: bcrypt password hashing, JWT access/refresh tokens, and
+ * a PostgreSQL-backed user store (with in-memory fallback). These endpoints are
+ * mounted publicly (no authMiddleware) except /me, which requires a token.
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
-import { asyncHandler, ValidationError, AuthenticationError } from '../middleware/errorHandler';
-import { generateTokens, AuthenticatedRequest } from '../middleware/auth';
-import { User, UserRole, AuthRequest, AuthResponse } from '../../types';
+import {
+  asyncHandler,
+  ValidationError,
+  AuthenticationError,
+} from '../middleware/errorHandler';
+import { validateBody } from '../middleware/validate';
+import {
+  generateTokens,
+  verifyRefreshToken,
+  authMiddleware,
+  AuthenticatedRequest,
+} from '../middleware/auth';
+import { UserRole, AuthResponse } from '../../types';
 import { logger } from '../utils/logger';
-import database from '../config/database';
+import {
+  findByEmail,
+  findById,
+  existsByEmailOrUsername,
+  createUser,
+  updateLastLogin,
+  updateProfile,
+  toPublicUser,
+  defaultPreferences,
+} from '../services/userRepository';
 
 const router = Router();
 
-// Mock user database - in production this would be in a real database
-const users: User[] = [
-  {
-    id: 'admin-123',
-    email: 'admin@cognitive-fabric.com',
-    username: 'admin',
-    fullName: 'System Administrator',
-    role: UserRole.ADMIN,
-    preferences: {
-      theme: 'dark',
-      language: 'en',
-      defaultVisualizationSettings: {
-        colorScheme: 'cognitive',
-        animationEnabled: true,
-        detailLevel: 'comprehensive',
-      },
-      notifications: {
-        email: true,
-        browser: true,
-        processingComplete: true,
-        errors: true,
-      },
-    },
-    createdAt: new Date(),
-  },
-];
+const SALT_ROUNDS = 12;
+
+// --- Validation schemas ---
+const registerSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(8, 'Password must be at least 8 characters long'),
+  username: z.string().min(1, 'username is required').max(100),
+  fullName: z.string().min(1, 'fullName is required').max(255),
+  // Accepted for forward-compat but ignored — self-registration is always VIEWER.
+  role: z.nativeEnum(UserRole).optional(),
+});
+
+const loginSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+const refreshSchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token is required'),
+});
+
+/** Convert a JWT duration string ('7d', '24h', '15m', '30s') to milliseconds. */
+function durationToMs(d: string): number {
+  const match = /^(\d+)\s*([smhd])?$/.exec(d.trim());
+  if (!match) return 0;
+  const n = parseInt(match[1], 10);
+  const unit = match[2] ?? 's';
+  const mult = unit === 'd' ? 86_400_000 : unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : 1_000;
+  return n * mult;
+}
 
 // Register a new user
-router.post('/register', asyncHandler(async (req: Request, res: Response) => {
-  const { email, password, username, fullName, role = UserRole.VIEWER }: AuthRequest = req.body;
+router.post('/register', validateBody(registerSchema), asyncHandler(async (req: Request, res: Response) => {
+  const { email, password, username, fullName } = req.body as {
+    email: string;
+    password: string;
+    username: string;
+    fullName: string;
+  };
 
-  // Validate input
-  if (!email || !password || !username || !fullName) {
-    throw new ValidationError('All fields are required: email, password, username, fullName');
-  }
-
-  if (password.length < 8) {
-    throw new ValidationError('Password must be at least 8 characters long');
-  }
-
-  if (!email.includes('@') || !email.includes('.')) {
-    throw new ValidationError('Invalid email format');
-  }
-
-  // Check if user already exists
-  const existingUser = users.find(u => u.email === email || u.username === username);
-  if (existingUser) {
+  if (await existsByEmailOrUsername(email, username)) {
     throw new ValidationError('User with this email or username already exists');
   }
 
-  // Hash password
-  const saltRounds = 12;
-  const passwordHash = await bcrypt.hash(password, saltRounds);
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  // Create new user
-  const newUser: User = {
-    id: uuidv4(),
+  const record = await createUser({
     email,
     username,
     fullName,
-    role,
-    preferences: {
-      theme: 'light',
-      language: 'en',
-      defaultVisualizationSettings: {
-        colorScheme: 'default',
-        animationEnabled: true,
-        detailLevel: 'detailed',
-      },
-      notifications: {
-        email: true,
-        browser: true,
-        processingComplete: true,
-        errors: true,
-      },
-    },
-    createdAt: new Date(),
-  };
-
-  // In production, save to database
-  users.push(newUser);
-
-  logger.info('User registered', {
-    userId: newUser.id,
-    email: newUser.email,
-    username: newUser.username,
-    role: newUser.role,
+    passwordHash,
+    role: UserRole.VIEWER, // never honour a client-supplied privileged role
+    preferences: defaultPreferences(),
   });
 
-  // Generate tokens
-  const tokens = generateTokens({
-    id: newUser.id,
-    email: newUser.email,
-    role: newUser.role,
-  });
+  logger.info('User registered', { userId: record.id, email: record.email, username: record.username });
+
+  const tokens = generateTokens({ id: record.id, email: record.email, role: record.role });
 
   const response: AuthResponse = {
-    user: newUser,
+    user: toPublicUser(record),
     token: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    expiresAt: new Date(Date.now() + parseInt(tokens.expiresIn) * 1000),
+    expiresAt: new Date(Date.now() + durationToMs(tokens.expiresIn)),
   };
 
   res.status(201).json(response);
 }));
 
 // Login user
-router.post('/login', asyncHandler(async (req: Request, res: Response) => {
-  const { email, password }: { email: string; password: string } = req.body;
+router.post('/login', validateBody(loginSchema), asyncHandler(async (req: Request, res: Response) => {
+  const { email, password } = req.body as { email: string; password: string };
 
-  // Validate input
-  if (!email || !password) {
-    throw new ValidationError('Email and password are required');
-  }
-
-  // Find user (in production, query database with password hash)
-  const user = users.find(u => u.email === email);
-  if (!user) {
+  const record = await findByEmail(email);
+  if (!record) {
     throw new AuthenticationError('Invalid email or password');
   }
 
-  // In production, verify password hash
-  // const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-  // if (!isValidPassword) {
-  //   throw new AuthenticationError('Invalid email or password');
-  // }
-
-  // For demo, accept any password
-  if (password.length < 1) {
+  const isValid = await bcrypt.compare(password, record.passwordHash);
+  if (!isValid) {
     throw new AuthenticationError('Invalid email or password');
   }
 
-  // Update last login
-  user.lastLoginAt = new Date();
+  await updateLastLogin(record.id);
 
-  logger.info('User logged in', {
-    userId: user.id,
-    email: user.email,
-    role: user.role,
-  });
+  logger.info('User logged in', { userId: record.id, email: record.email, role: record.role });
 
-  // Generate tokens
-  const tokens = generateTokens({
-    id: user.id,
-    email: user.email,
-    role: user.role,
-  });
+  const tokens = generateTokens({ id: record.id, email: record.email, role: record.role });
 
   const response: AuthResponse = {
-    user,
+    user: toPublicUser({ ...record, lastLoginAt: new Date() }),
     token: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    expiresAt: new Date(Date.now() + parseInt(tokens.expiresIn) * 1000),
+    expiresAt: new Date(Date.now() + durationToMs(tokens.expiresIn)),
   };
 
   res.json(response);
 }));
 
-// Refresh access token
-router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
-  const { refreshToken }: { refreshToken: string } = req.body;
+// Refresh access token (rotates both tokens)
+router.post('/refresh', validateBody(refreshSchema), asyncHandler(async (req: Request, res: Response) => {
+  const { refreshToken } = req.body as { refreshToken: string };
 
-  if (!refreshToken) {
-    throw new ValidationError('Refresh token is required');
+  let userId: string;
+  try {
+    ({ userId } = verifyRefreshToken(refreshToken));
+  } catch {
+    throw new AuthenticationError('Invalid or expired refresh token');
   }
 
-  try {
-    // Verify refresh token and generate new access token
-    const newAccessToken = jwt.verify(refreshToken, process.env.JWT_SECRET!);
-
-    // In production, fetch user from database
-    const user = users.find(u => u.id === (newAccessToken as any).userId);
-    if (!user) {
-      throw new AuthenticationError('Invalid refresh token');
-    }
-
-    const tokens = generateTokens({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    res.json({
-      token: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresAt: new Date(Date.now() + parseInt(tokens.expiresIn) * 1000),
-    });
-  } catch (error) {
+  const record = await findById(userId);
+  if (!record) {
     throw new AuthenticationError('Invalid refresh token');
   }
+
+  const tokens = generateTokens({ id: record.id, email: record.email, role: record.role });
+
+  res.json({
+    token: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresAt: new Date(Date.now() + durationToMs(tokens.expiresIn)),
+  });
 }));
 
-// Logout user
+// Logout user (stateless — the client discards its tokens)
 router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
-  const { refreshToken }: { refreshToken?: string } = req.body;
-
-  // In production, invalidate refresh token in database
-  // For now, just return success
-
-  logger.info('User logged out', {
-    userId: (req as AuthenticatedRequest).user?.id,
-  });
-
-  res.json({
-    message: 'Logged out successfully',
-  });
+  logger.info('User logged out', { userId: (req as AuthenticatedRequest).user?.id });
+  res.json({ message: 'Logged out successfully' });
 }));
 
-// Get current user profile
-router.get('/me', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user;
-
-  if (!user) {
-    throw new AuthenticationError('User not authenticated');
+// Get current user profile (requires a valid access token)
+router.get('/me', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const record = await findById(userId);
+  if (!record) {
+    throw new AuthenticationError('User not found');
   }
-
-  // In production, fetch full user profile from database
-  const fullUser = users.find(u => u.id === user.id) || user;
-
-  res.json({
-    user: fullUser,
-  });
+  res.json({ user: toPublicUser(record) });
 }));
 
-// Update user profile
-router.put('/me', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user;
-  const updates = req.body;
+// Update current user profile (requires a valid access token)
+router.put('/me', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { fullName, preferences } = req.body ?? {};
 
-  if (!user) {
-    throw new AuthenticationError('User not authenticated');
-  }
-
-  // Find user in database
-  const userIndex = users.findIndex(u => u.id === user.id);
-  if (userIndex === -1) {
+  const updated = await updateProfile(userId, { fullName, preferences });
+  if (!updated) {
     throw new ValidationError('User not found');
   }
 
-  // Update allowed fields
-  const allowedFields = ['fullName', 'preferences'] as const;
-  const filteredUpdates: Partial<User> = {};
-
-  for (const field of allowedFields) {
-    if (updates[field] !== undefined) {
-      (filteredUpdates as Record<string, unknown>)[field] = updates[field];
-    }
-  }
-
-  // Update user
-  users[userIndex] = { ...users[userIndex], ...filteredUpdates };
-
-  logger.info('User profile updated', {
-    userId: user.id,
-    updatedFields: Object.keys(filteredUpdates),
-  });
-
-  res.json({
-    user: users[userIndex],
-  });
+  logger.info('User profile updated', { userId });
+  res.json({ user: toPublicUser(updated) });
 }));
 
 export default router;

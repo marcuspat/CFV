@@ -1,16 +1,17 @@
 /**
- * Integration tests for production-hardening middleware:
+ * Integration tests for production-hardening + authentication middleware:
+ *   - JWT auth: register / login / refresh, protected routes reject no token
  *   - Zod input validation -> 400 + structured error
- *   - express-rate-limit on /api/analysis -> 429 after 10 req / window
+ *   - express-rate-limit on /api/analysis -> 429 after 10 req/window
  *
  * Drives the real Express application (App) via supertest, so the assertions
- * cover the production wiring (validation schemas + the analysis rate limiter
- * mounted in app.ts), not a re-declared test harness.
+ * cover the production wiring. The user store falls back to in-memory when no
+ * database is connected (as here), so auth works without Postgres.
  *
  * Run with:  npx jest --config jest.config.integration.cjs
  */
 
-// These must be set before the server config module is (dynamically) imported —
+// Must be set before the server config module is (dynamically) imported —
 // config/index.ts requires JWT_SECRET (>= 32 chars) at load time.
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET =
@@ -32,6 +33,104 @@ async function buildApp(): Promise<Application> {
   return instance.app;
 }
 
+// A valid access token shared by the protected-route tests below. The in-memory
+// user store is module-global, and every app instance verifies tokens with the
+// same JWT_SECRET, so one registration is reusable across app instances.
+let authToken: string;
+const bearer = () => `Bearer ${authToken}`;
+
+beforeAll(async () => {
+  const app = await buildApp();
+  const res = await request(app).post('/api/auth/register').send({
+    email: 'itest@example.com',
+    password: 'password123',
+    username: 'itest_user',
+    fullName: 'Integration Test',
+  });
+  authToken = res.body.token;
+});
+
+describe('Authentication (JWT + bcrypt)', () => {
+  let app: Application;
+  const creds = {
+    email: 'authflow@example.com',
+    password: 'password123',
+    username: 'authflow_user',
+    fullName: 'Auth Flow',
+  };
+
+  beforeAll(async () => {
+    app = await buildApp();
+  });
+
+  it('registers a new user -> 201 with tokens and no password hash', async () => {
+    const res = await request(app).post('/api/auth/register').send(creds);
+    expect(res.status).toBe(201);
+    expect(res.body.token).toBeTruthy();
+    expect(res.body.refreshToken).toBeTruthy();
+    expect(res.body.user.email).toBe(creds.email);
+    expect(res.body.user.role).toBe('viewer');
+    expect(res.body.user.passwordHash).toBeUndefined();
+  });
+
+  it('rejects duplicate registration -> 400', async () => {
+    const res = await request(app).post('/api/auth/register').send(creds);
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a too-short password at registration -> 400', async () => {
+    const res = await request(app).post('/api/auth/register').send({
+      email: 'shortpw@example.com',
+      password: 'short',
+      username: 'shortpw_user',
+      fullName: 'Short PW',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('logs in with correct credentials -> 200 with a token', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: creds.email, password: creds.password });
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeTruthy();
+  });
+
+  it('rejects login with a wrong password -> 401', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: creds.email, password: 'wrong-password' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a protected route with no token -> 401', async () => {
+    const res = await request(app)
+      .post('/api/conversations')
+      .send({ title: 'x', transcript: ['y'] });
+    expect(res.status).toBe(401);
+  });
+
+  it('refreshes tokens with a valid refresh token -> 200', async () => {
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: creds.email, password: creds.password });
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: login.body.refreshToken });
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeTruthy();
+    expect(res.body.refreshToken).toBeTruthy();
+  });
+
+  it('rejects refresh with a garbage token -> 401', async () => {
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: 'not-a-real-token' });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('API hardening — Zod input validation', () => {
   let app: Application;
 
@@ -42,6 +141,7 @@ describe('API hardening — Zod input validation', () => {
   it('rejects an empty/invalid conversation payload with 400 + structured issues', async () => {
     const res = await request(app)
       .post('/api/conversations')
+      .set('Authorization', bearer())
       .send({ title: '', transcript: [] });
 
     expect(res.status).toBe(400);
@@ -55,6 +155,7 @@ describe('API hardening — Zod input validation', () => {
   it('rejects a conversation payload with the wrong transcript type', async () => {
     const res = await request(app)
       .post('/api/conversations')
+      .set('Authorization', bearer())
       .send({ title: 'ok', transcript: 'not-an-array' });
 
     expect(res.status).toBe(400);
@@ -64,6 +165,7 @@ describe('API hardening — Zod input validation', () => {
   it('accepts a well-formed conversation payload (201)', async () => {
     const res = await request(app)
       .post('/api/conversations')
+      .set('Authorization', bearer())
       .send({ title: 'Valid title', transcript: ['hello world'] });
 
     expect(res.status).toBe(201);
@@ -73,6 +175,7 @@ describe('API hardening — Zod input validation', () => {
   it('rejects an analysis-start payload missing conversationId with 400', async () => {
     const res = await request(app)
       .post('/api/analysis/start')
+      .set('Authorization', bearer())
       .send({ conversationText: 'some text but no conversationId' });
 
     expect(res.status).toBe(400);
@@ -91,8 +194,11 @@ describe('API hardening — rate limiting on /api/analysis', () => {
 
     for (let i = 0; i < 11; i++) {
       // Invalid body keeps each request cheap (400 from validation) while still
-      // counting against the limiter, which runs before the route handler.
-      const res = await request(app).post('/api/analysis/start').send({});
+      // counting against the limiter, which runs after auth but before the route.
+      const res = await request(app)
+        .post('/api/analysis/start')
+        .set('Authorization', bearer())
+        .send({});
       statuses.push(res.status);
     }
 

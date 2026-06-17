@@ -301,6 +301,9 @@ class DatabaseManager {
 
     // Create indexes
     const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email))',
+      'CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))',
+      'CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)',
       'CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(processing_status)',
       'CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created_at DESC)',
