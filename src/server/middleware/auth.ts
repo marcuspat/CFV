@@ -4,6 +4,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
 import { AuthenticationError, AuthorizationError } from './errorHandler';
 import { User, UserRole } from '../../types';
@@ -20,6 +21,7 @@ interface JWTPayload {
   email: string;
   role: UserRole;
   type?: 'access' | 'refresh';
+  jti?: string;
   iat?: number;
   exp?: number;
 }
@@ -34,12 +36,14 @@ export const verifyAccessToken = (token: string): JWTPayload => {
 };
 
 /** Verify a refresh token; rejects access tokens presented as refresh tokens. */
-export const verifyRefreshToken = (token: string): { userId: string } => {
+export const verifyRefreshToken = (
+  token: string
+): { userId: string; jti?: string; exp?: number } => {
   const decoded = jwt.verify(token, config.JWT_SECRET) as JWTPayload;
   if (decoded.type !== 'refresh') {
     throw new AuthenticationError('Invalid refresh token');
   }
-  return { userId: decoded.userId };
+  return { userId: decoded.userId, jti: decoded.jti, exp: decoded.exp };
 };
 
 // Authentication middleware — requires a valid Bearer access token.
@@ -148,7 +152,7 @@ export const generateTokens = (user: { id: string; email: string; role: UserRole
   } as jwt.SignOptions);
 
   const refreshToken = jwt.sign(
-    { userId: user.id, type: 'refresh' },
+    { userId: user.id, type: 'refresh', jti: uuidv4() },
     config.JWT_SECRET,
     {
       expiresIn: config.JWT_REFRESH_EXPIRES_IN,

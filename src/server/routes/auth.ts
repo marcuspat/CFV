@@ -33,6 +33,7 @@ import {
   toPublicUser,
   defaultPreferences,
 } from '../services/userRepository';
+import { revokeRefreshToken, isRefreshTokenRevoked } from '../services/tokenRevocation';
 
 const router = Router();
 
@@ -140,10 +141,15 @@ router.post('/refresh', validateBody(refreshSchema), asyncHandler(async (req: Re
   const { refreshToken } = req.body as { refreshToken: string };
 
   let userId: string;
+  let jti: string | undefined;
   try {
-    ({ userId } = verifyRefreshToken(refreshToken));
+    ({ userId, jti } = verifyRefreshToken(refreshToken));
   } catch {
     throw new AuthenticationError('Invalid or expired refresh token');
+  }
+
+  if (jti && (await isRefreshTokenRevoked(jti))) {
+    throw new AuthenticationError('Refresh token has been revoked');
   }
 
   const record = await findById(userId);
@@ -160,8 +166,23 @@ router.post('/refresh', validateBody(refreshSchema), asyncHandler(async (req: Re
   });
 }));
 
-// Logout user (stateless — the client discards its tokens)
+// Logout user — revokes the supplied refresh token so it cannot be reused.
 router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
+  const { refreshToken } = (req.body ?? {}) as { refreshToken?: string };
+
+  if (refreshToken) {
+    try {
+      const { jti, exp } = verifyRefreshToken(refreshToken);
+      if (jti) {
+        // Keep the blocklist entry only until the token would have expired.
+        const ttlSeconds = exp ? Math.max(1, exp - Math.floor(Date.now() / 1000)) : 60;
+        await revokeRefreshToken(jti, ttlSeconds);
+      }
+    } catch {
+      // Invalid/expired token — nothing to revoke; logout is best-effort.
+    }
+  }
+
   logger.info('User logged out', { userId: (req as AuthenticatedRequest).user?.id });
   res.json({ message: 'Logged out successfully' });
 }));

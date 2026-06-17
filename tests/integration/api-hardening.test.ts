@@ -129,6 +129,25 @@ describe('Authentication (JWT + bcrypt)', () => {
       .send({ refreshToken: 'not-a-real-token' });
     expect(res.status).toBe(401);
   });
+
+  it('revokes the refresh token on logout; reuse returns 401', async () => {
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: creds.email, password: creds.password });
+    const rt = login.body.refreshToken as string;
+
+    // Valid before logout.
+    const before = await request(app).post('/api/auth/refresh').send({ refreshToken: rt });
+    expect(before.status).toBe(200);
+
+    // Logout revokes this refresh token.
+    const out = await request(app).post('/api/auth/logout').send({ refreshToken: rt });
+    expect(out.status).toBe(200);
+
+    // Reuse after revocation is rejected.
+    const reuse = await request(app).post('/api/auth/refresh').send({ refreshToken: rt });
+    expect(reuse.status).toBe(401);
+  });
 });
 
 describe('API hardening — Zod input validation', () => {
