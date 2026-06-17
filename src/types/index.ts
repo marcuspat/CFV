@@ -34,6 +34,7 @@ export type {
 // Database configuration types
 export interface DatabaseConfiguration {
   postgres: {
+    connectionString?: string;
     host: string;
     port: number;
     database: string;

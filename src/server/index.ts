@@ -2,6 +2,8 @@
  * Main entry point for Cognitive Fabric Visualizer server
  */
 
+// Validate required env vars before anything else parses the strict config.
+import './config/validateStartupEnv';
 import App from './app';
 import { validateConfig, config } from './config';
 import { logger } from './utils/logger';

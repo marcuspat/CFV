@@ -61,20 +61,61 @@ Return ONLY valid JSON:
       }
       Rules: 3-12 elements, all four dimensions, genuine confidence scores.`;
 
+// --- LLM resilience: per-request timeout, bounded retries with jitter, output cap ---
+const LLM_TIMEOUT_MS = 30_000;
+const LLM_MAX_ATTEMPTS = 3;
+const LLM_MAX_TOKENS = 4096; // cost guard: hard cap on generated tokens
+
+function httpStatusOf(err: unknown): number | undefined {
+    const e = err as { status?: number; response?: { status?: number } };
+    return e?.status ?? e?.response?.status;
+}
+
+// Retry only transient failures: rate limits (429) and server errors (5xx).
+export function isRetryableError(err: unknown): boolean {
+    const status = httpStatusOf(err);
+    return status === 429 || (typeof status === 'number' && status >= 500 && status <= 599);
+}
+
+export async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= LLM_MAX_ATTEMPTS; attempt++) {
+          try {
+                  return await fn();
+          } catch (err) {
+                  lastError = err;
+                  if (attempt >= LLM_MAX_ATTEMPTS || !isRetryableError(err)) break;
+                  // Exponential backoff with jitter: ~0.5s, 1s, 2s (+ up to 250ms).
+                  const base = Math.min(8_000, 500 * 2 ** (attempt - 1));
+                  const delay = base + Math.floor(Math.random() * 250);
+                  logger.warn('LLM call failed (retryable); backing off', {
+                            label, attempt, status: httpStatusOf(err), delayMs: delay,
+                  });
+                  await new Promise((r) => setTimeout(r, delay));
+          }
+    }
+    throw lastError;
+}
+
 async function callLLM(conversationText: string): Promise<LLMAnalysisResult> {
     if (process.env.OPENAI_API_KEY) {
           try {
                   const openai = getOpenAI();
-                  const completion = await openai.chat.completions.create({
-                            model: 'gpt-4o',
-                            messages: [
-                              { role: 'system', content: SYSTEM_PROMPT },
-                              { role: 'user', content: `Analyze this conversation:\n\n${conversationText}` },
-                                      ],
-                            temperature: 0.3,
-                            max_tokens: 4096,
-                            response_format: { type: 'json_object' },
-                  });
+                  const completion = await withRetry('openai', () =>
+                            openai.chat.completions.create(
+                              {
+                                            model: 'gpt-4o',
+                                            messages: [
+                                              { role: 'system', content: SYSTEM_PROMPT },
+                                              { role: 'user', content: `Analyze this conversation:\n\n${conversationText}` },
+                                            ],
+                                            temperature: 0.3,
+                                            max_tokens: LLM_MAX_TOKENS,
+                                            response_format: { type: 'json_object' },
+                              },
+                              { timeout: LLM_TIMEOUT_MS, maxRetries: 0 }
+                            )
+                  );
                   const raw = completion.choices[0]?.message?.content;
                   if (!raw) throw new Error('Empty response from OpenAI');
                   logger.info('OpenAI analysis complete', { model: completion.model, tokens: completion.usage?.total_tokens });
@@ -85,12 +126,17 @@ async function callLLM(conversationText: string): Promise<LLMAnalysisResult> {
     }
     if (process.env.ANTHROPIC_API_KEY) {
           const anthropic = getAnthropic();
-          const message = await anthropic.messages.create({
-                  model: 'claude-3-5-sonnet-20241022',
-                  max_tokens: 4096,
-                  system: SYSTEM_PROMPT,
-                  messages: [{ role: 'user', content: `Analyze this conversation:\n\n${conversationText}` }],
-          });
+          const message = await withRetry('anthropic', () =>
+                  anthropic.messages.create(
+                            {
+                              model: 'claude-3-5-sonnet-20241022',
+                              max_tokens: LLM_MAX_TOKENS,
+                              system: SYSTEM_PROMPT,
+                              messages: [{ role: 'user', content: `Analyze this conversation:\n\n${conversationText}` }],
+                            },
+                            { timeout: LLM_TIMEOUT_MS, maxRetries: 0 }
+                  )
+          );
           const raw = message.content[0]?.type === 'text' ? message.content[0].text : null;
           if (!raw) throw new Error('Empty response from Anthropic');
           logger.info('Anthropic analysis complete', { model: message.model });

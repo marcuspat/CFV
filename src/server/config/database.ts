@@ -36,17 +36,27 @@ class DatabaseManager {
   }
 
   private async initializePostgres(config: DatabaseConfiguration['postgres']): Promise<void> {
-    const poolConfig: PoolConfig = {
-      host: config.host,
-      port: config.port,
-      database: config.database,
-      user: config.username,
-      password: config.password,
-      ssl: config.ssl,
-      max: config.maxConnections || 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    };
+    // Prefer a full connection string (DATABASE_URL) when provided; otherwise
+    // fall back to the discrete host/port/credentials fields.
+    const poolConfig: PoolConfig = config.connectionString
+      ? {
+          connectionString: config.connectionString,
+          ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
+          max: config.maxConnections || 20,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000,
+        }
+      : {
+          host: config.host,
+          port: config.port,
+          database: config.database,
+          user: config.username,
+          password: config.password,
+          ssl: config.ssl,
+          max: config.maxConnections || 20,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000,
+        };
 
     this.postgresPool = new Pool(poolConfig);
 

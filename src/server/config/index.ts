@@ -21,6 +21,9 @@ const ConfigSchema = z.object({
   DB_NAME: z.string().default('cognitive_fabric'),
   DB_USER: z.string().default('postgres'),
   DB_PASSWORD: z.string().default('password'),
+  // Full Postgres connection string (preferred in prod; e.g. Railway/Heroku).
+  // When set it takes precedence over the discrete DB_* fields above.
+  DATABASE_URL: z.string().optional(),
 
   // Neo4j Configuration
   NEO4J_URI: z.string().default('bolt://localhost:7687'),
@@ -81,6 +84,7 @@ export { config };
 export function getDatabaseConfig(): DatabaseConfiguration {
   return {
     postgres: {
+      connectionString: config.DATABASE_URL,
       host: config.DB_HOST,
       port: config.DB_PORT,
       database: config.DB_NAME,
