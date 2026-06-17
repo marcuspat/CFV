@@ -9,10 +9,12 @@ import compression from 'compression';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 import rateLimit from 'express-rate-limit';
+import pinoHttp from 'pino-http';
+import { v4 as uuidv4 } from 'uuid';
 
 import { config, getServerConfig, getWebSocketConfig } from './config';
 import database from './config/database';
-import { logger } from './utils/logger';
+import { logger, pinoLogger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import { authMiddleware } from './middleware/auth';
 import { setupWebSocket } from './services/websocket';
@@ -81,6 +83,27 @@ class App {
   private initializeMiddlewares(): void {
     const serverConfig = getServerConfig();
 
+    // Trust the first proxy hop (correct req.ip behind a proxy; used by rate limiting).
+    this.app.set('trust proxy', 1);
+
+    // Request ID: reuse an incoming X-Request-Id or generate a uuid v4; echo it back.
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
+      const incoming = req.headers['x-request-id'];
+      const requestId = typeof incoming === 'string' && incoming.trim() ? incoming.trim() : uuidv4();
+      req.headers['x-request-id'] = requestId;
+      res.setHeader('X-Request-Id', requestId);
+      next();
+    });
+
+    // Structured HTTP request logging (method, path, status, duration, requestId).
+    this.app.use(
+      pinoHttp({
+        logger: pinoLogger,
+        genReqId: (req) => req.headers['x-request-id'] as string,
+        customProps: (req) => ({ requestId: req.headers['x-request-id'] }),
+      })
+    );
+
     if (serverConfig.helmet) {
       this.app.use(helmet(serverConfig.helmet as any));
     }
@@ -93,24 +116,6 @@ class App {
 
     // Monitoring middleware for API performance tracking
     this.app.use('/api', createMiddleware());
-
-    // Request logging
-    this.app.use((req: Request, res: Response, next: NextFunction) => {
-      const start = Date.now();
-      res.on('finish', () => {
-        logger.info('HTTP Request', {
-          method: req.method,
-          url: req.url,
-          status: res.statusCode,
-          duration: `${Date.now() - start}ms`,
-          userAgent: req.get('User-Agent'),
-          ip: req.ip,
-        });
-      });
-      next();
-    });
-
-    this.app.set('trust proxy', 1);
   }
 
   private async initializeRoutes(): Promise<void> {

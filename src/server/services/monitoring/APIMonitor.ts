@@ -9,6 +9,7 @@ import { performance } from 'perf_hooks';
 import { metricsCollector } from './MetricsCollector.js';
 import { executionTimer } from './ExecutionTimer.js';
 import { DEFAULT_MONITORING_CONFIG } from '../../../config/monitoring.js';
+import { logger } from '../../utils/logger';
 
 export interface APIMetrics {
   requests: RequestMetrics;
@@ -760,7 +761,7 @@ export class APIMonitor extends EventEmitter {
 
         this.emit('metrics', metrics);
       } catch (error) {
-        console.error('Error collecting API metrics:', error);
+        logger.error('Error collecting API metrics:', { err: error });
       }
     }, 30000);
   }

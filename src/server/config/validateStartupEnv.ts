@@ -6,8 +6,12 @@
  * a raw ZodError. In production a missing/invalid required variable aborts the
  * process with exit(1); in non-production it logs a warning and continues so
  * local/CI runs work with the in-memory/degraded fallbacks.
+ *
+ * Uses the pino logger (synchronous destination), so the fatal message flushes
+ * before process.exit(1).
  */
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger';
 
 dotenv.config();
 
@@ -26,19 +30,15 @@ export function validateStartupEnv(): void {
 
   if (errors.length === 0) return;
 
-  const message = `Invalid environment configuration:\n  - ${errors.join('\n  - ')}`;
-
   if (process.env.NODE_ENV === 'production') {
-    // eslint-disable-next-line no-console
-    console.error(`FATAL: ${message}`);
+    logger.error('FATAL: invalid environment configuration', { errors });
     process.exit(1);
   }
 
-  // eslint-disable-next-line no-console
-  console.warn(
-    `WARNING (NODE_ENV=${process.env.NODE_ENV ?? 'development'}): ${message}\n` +
-      'Continuing with degraded/fallback behavior — do not run production this way.'
-  );
+  logger.warn('Invalid environment configuration — continuing with degraded/fallback behavior', {
+    nodeEnv: process.env.NODE_ENV ?? 'development',
+    errors,
+  });
 }
 
 // Execute on import so it runs before ./config parses the strict schema.

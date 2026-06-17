@@ -10,6 +10,7 @@ import { promisify } from 'util';
 import { exec } from 'child_process';
 import { metricsCollector } from './MetricsCollector.js';
 import { DEFAULT_MONITORING_CONFIG } from '../../../config/monitoring.js';
+import { logger } from '../../utils/logger';
 
 const execAsync = promisify(exec);
 
@@ -791,7 +792,7 @@ export class NetworkMonitor extends EventEmitter {
 
         this.emit('metrics', metrics);
       } catch (error) {
-        console.error('Error collecting network metrics:', error);
+        logger.error('Error collecting network metrics:', { err: error });
       }
     }, this.config.interval * 2); // Network monitoring less frequent
   }

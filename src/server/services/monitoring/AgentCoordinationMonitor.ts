@@ -8,6 +8,7 @@ import { performance } from 'perf_hooks';
 import { metricsCollector } from './MetricsCollector.js';
 import { executionTimer } from './ExecutionTimer.js';
 import { DEFAULT_MONITORING_CONFIG } from '../../../config/monitoring.js';
+import { logger } from '../../utils/logger';
 
 export interface AgentMetrics {
   agents: AgentInfo[];
@@ -871,7 +872,7 @@ export class AgentCoordinationMonitor extends EventEmitter {
 
         this.emit('metrics', metrics);
       } catch (error) {
-        console.error('Error collecting agent coordination metrics:', error);
+        logger.error('Error collecting agent coordination metrics:', { err: error });
       }
     }, this.config.interval * 2); // Less frequent collection
   }

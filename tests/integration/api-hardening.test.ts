@@ -321,3 +321,28 @@ describe('Conversation persistence', () => {
     expect(got.status).toBe(404);
   });
 });
+
+describe('Request ID middleware', () => {
+  let app: Application;
+
+  beforeAll(async () => {
+    app = await buildApp();
+  });
+
+  it('generates and echoes an X-Request-Id when none is provided', async () => {
+    const res = await request(app).get('/api/conversations').set('Authorization', bearer());
+    expect(res.status).toBe(200);
+    expect(res.headers['x-request-id']).toBeTruthy();
+    // uuid v4 shape
+    expect(res.headers['x-request-id']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+
+  it('echoes back a caller-provided X-Request-Id', async () => {
+    const res = await request(app)
+      .get('/api/conversations')
+      .set('Authorization', bearer())
+      .set('X-Request-Id', 'trace-abc-123');
+    expect(res.status).toBe(200);
+    expect(res.headers['x-request-id']).toBe('trace-abc-123');
+  });
+});

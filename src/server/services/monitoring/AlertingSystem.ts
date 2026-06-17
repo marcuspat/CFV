@@ -12,6 +12,7 @@ import { apiMonitor } from './APIMonitor.js';
 import { agentCoordinationMonitor } from './AgentCoordinationMonitor.js';
 import { metricsCollector } from './MetricsCollector.js';
 import { DEFAULT_MONITORING_CONFIG, AlertConfig, AlertChannel } from '../../../config/monitoring.js';
+import { logger } from '../../utils/logger';
 
 export interface Alert {
   id: string;
@@ -453,7 +454,7 @@ export class AlertingSystem extends EventEmitter {
         await this.checkSystemHealth();
         this.cleanupOldAlerts();
       } catch (error) {
-        console.error('Error in alerting system:', error);
+        logger.error('Error in alerting system:', { err: error });
       }
     }, 30000); // Check every 30 seconds
   }
@@ -626,7 +627,7 @@ export class AlertingSystem extends EventEmitter {
         try {
           await this.executeAction(action, alert);
         } catch (error) {
-          console.error(`Error executing alert action:`, error);
+          logger.error(`Error executing alert action:`, { err: error });
           action.error = (error as Error).message;
         }
       }
@@ -638,7 +639,7 @@ export class AlertingSystem extends EventEmitter {
       try {
         await this.sendNotification(channel, alert);
       } catch (error) {
-        console.error(`Error sending notification to ${channel.name}:`, error);
+        logger.error(`Error sending notification to ${channel.name}:`, { err: error });
       }
     }
 
@@ -682,7 +683,7 @@ export class AlertingSystem extends EventEmitter {
     switch (action.type) {
       case 'script':
         // Execute script action
-        console.log(`Executing script: ${action.description}`);
+        logger.info(`Executing script: ${action.description}`);
         action.result = { status: 'executed' };
         break;
 
@@ -702,25 +703,25 @@ export class AlertingSystem extends EventEmitter {
 
       case 'email':
         // Send email (would need email service integration)
-        console.log(`Sending email: ${action.description}`);
+        logger.info(`Sending email: ${action.description}`);
         action.result = { status: 'sent' };
         break;
 
       case 'slack':
         // Send Slack notification (would need Slack integration)
-        console.log(`Sending Slack message: ${action.description}`);
+        logger.info(`Sending Slack message: ${action.description}`);
         action.result = { status: 'sent' };
         break;
 
       case 'restart':
         // Restart service (would need service management)
-        console.log(`Restarting service: ${action.description}`);
+        logger.info(`Restarting service: ${action.description}`);
         action.result = { status: 'restarted' };
         break;
 
       case 'scale':
         // Scale resources (would need auto-scaling integration)
-        console.log(`Scaling resources: ${action.description}`);
+        logger.info(`Scaling resources: ${action.description}`);
         action.result = { status: 'scaled' };
         break;
     }
@@ -729,7 +730,7 @@ export class AlertingSystem extends EventEmitter {
   private async sendNotification(channel: NotificationChannel, alert: Alert): Promise<void> {
     // Check rate limiting
     if (!this.checkRateLimit(channel.id)) {
-      console.log(`Rate limit exceeded for channel ${channel.name}`);
+      logger.info(`Rate limit exceeded for channel ${channel.name}`);
       return;
     }
 
@@ -737,17 +738,17 @@ export class AlertingSystem extends EventEmitter {
 
     switch (channel.type) {
       case 'console':
-        console.log(`[ALERT] ${alert.title}: ${alert.description}`);
+        logger.info(`[ALERT] ${alert.title}: ${alert.description}`);
         break;
 
       case 'email':
         // Would integrate with email service
-        console.log(`Email notification sent to ${channel.config.to}`);
+        logger.info(`Email notification sent to ${channel.config.to}`);
         break;
 
       case 'slack':
         // Would integrate with Slack API
-        console.log(`Slack notification sent to ${channel.config.channel}`);
+        logger.info(`Slack notification sent to ${channel.config.channel}`);
         break;
 
       case 'webhook':
@@ -758,7 +759,7 @@ export class AlertingSystem extends EventEmitter {
             body: JSON.stringify(message)
           });
         } catch (error) {
-          console.error('Webhook notification failed:', error);
+          logger.error('Webhook notification failed:', { err: error });
         }
         break;
     }

@@ -7,6 +7,7 @@ import { Pool, PoolConfig } from 'pg';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import { createClient, RedisClientType } from 'redis';
 import { DatabaseConfiguration } from '../../types';
+import { logger } from '../utils/logger';
 
 class DatabaseManager {
   private postgresPool?: Pool;
@@ -16,7 +17,7 @@ class DatabaseManager {
 
   async initialize(config: DatabaseConfiguration): Promise<void> {
     try {
-      console.log('Initializing database connections...');
+      logger.info('Initializing database connections...');
 
       // Initialize PostgreSQL
       await this.initializePostgres(config.postgres);
@@ -28,9 +29,9 @@ class DatabaseManager {
       await this.initializeRedis(config.redis);
 
       this.isInitialized = true;
-      console.log('All database connections initialized successfully');
+      logger.info('All database connections initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize database connections:', error);
+      logger.error('Failed to initialize database connections', { err: error });
       throw error;
     }
   }
@@ -64,7 +65,7 @@ class DatabaseManager {
     const client = await this.postgresPool.connect();
     try {
       await client.query('SELECT NOW()');
-      console.log('PostgreSQL connection established');
+      logger.info('PostgreSQL connection established');
     } finally {
       client.release();
     }
@@ -87,7 +88,7 @@ class DatabaseManager {
     });
     try {
       await session.run('RETURN 1');
-      console.log('Neo4j connection established');
+      logger.info('Neo4j connection established');
     } finally {
       await session.close();
     }
@@ -102,11 +103,11 @@ class DatabaseManager {
     // Key prefix will be handled in Redis operations
 
     this.redisClient.on('error', (error) => {
-      console.error('Redis Client Error:', error);
+      logger.error('Redis Client Error', { err: error });
     });
 
     await this.redisClient.connect();
-    console.log('Redis connection established');
+    logger.info('Redis connection established');
   }
 
   // PostgreSQL Methods
@@ -194,7 +195,7 @@ class DatabaseManager {
       await this.query('SELECT 1');
       health.postgres = true;
     } catch (error) {
-      console.error('PostgreSQL health check failed:', error);
+      logger.error('PostgreSQL health check failed', { err: error });
     }
 
     try {
@@ -202,7 +203,7 @@ class DatabaseManager {
       await this.runCypherQuery('RETURN 1');
       health.neo4j = true;
     } catch (error) {
-      console.error('Neo4j health check failed:', error);
+      logger.error('Neo4j health check failed', { err: error });
     }
 
     try {
@@ -210,7 +211,7 @@ class DatabaseManager {
       await this.redis!.ping();
       health.redis = true;
     } catch (error) {
-      console.error('Redis health check failed:', error);
+      logger.error('Redis health check failed', { err: error });
     }
 
     return health;
@@ -218,12 +219,12 @@ class DatabaseManager {
 
   // Migration Methods
   async runMigrations(): Promise<void> {
-    console.log('Running database migrations...');
+    logger.info('Running database migrations...');
 
     await this.runPostgresMigrations();
     await this.runNeo4jMigrations();
 
-    console.log('Migrations completed successfully');
+    logger.info('Migrations completed successfully');
   }
 
   private async runPostgresMigrations(): Promise<void> {
@@ -379,21 +380,21 @@ class DatabaseManager {
 
   // Cleanup Methods
   async close(): Promise<void> {
-    console.log('Closing database connections...');
+    logger.info('Closing database connections...');
 
     if (this.postgresPool) {
       await this.postgresPool.end();
-      console.log('PostgreSQL connection closed');
+      logger.info('PostgreSQL connection closed');
     }
 
     if (this.neo4jDriver) {
       await this.neo4jDriver.close();
-      console.log('Neo4j connection closed');
+      logger.info('Neo4j connection closed');
     }
 
     if (this.redisClient) {
       await this.redisClient.quit();
-      console.log('Redis connection closed');
+      logger.info('Redis connection closed');
     }
 
     this.isInitialized = false;

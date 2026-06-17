@@ -5,6 +5,7 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 import { DatabaseConfiguration } from '../../types';
+import { logger } from '../utils/logger';
 
 // Load environment variables
 dotenv.config();
@@ -65,6 +66,8 @@ const ConfigSchema = z.object({
 
   // Security Configuration
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  // Comma-separated explicit allowlist of permitted browser origins (no wildcards).
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
   RATE_LIMIT_WINDOW_MS: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(900000)), // 15 minutes
   RATE_LIMIT_MAX_REQUESTS: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(100)),
 
@@ -129,8 +132,10 @@ export function validateConfig(): void {
   const missingRecommended = recommendedEnvVars.filter(varName => !process.env[varName]);
 
   if (missingRecommended.length > 0) {
-    console.warn(`Missing recommended environment variables: ${missingRecommended.join(', ')}`);
-    console.warn('Some features may not work correctly without these variables.');
+    logger.warn('Missing recommended environment variables', {
+      missing: missingRecommended,
+      note: 'Some features may not work correctly without these variables.',
+    });
   }
 }
 
@@ -153,7 +158,9 @@ export function getServerConfig() {
     port: config.PORT,
     env: config.NODE_ENV,
     cors: {
-      origin: isDevelopment() ? ['http://localhost:3000', 'http://localhost:5173'] : config.CORS_ORIGIN.split(','),
+      // Explicit allowlist from CORS_ORIGINS (no wildcard). credentials:true is
+      // required so the browser sends/stores the httpOnly refresh_token cookie.
+      origin: config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
       credentials: true,
     },
     rateLimit: {

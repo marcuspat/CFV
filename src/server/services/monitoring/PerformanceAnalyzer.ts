@@ -6,6 +6,7 @@
 import { EventEmitter } from 'events';
 import { metricsCollector, Metric, MetricSnapshot } from './MetricsCollector.js';
 import { DEFAULT_MONITORING_CONFIG, PerformanceThresholds } from '../../../config/monitoring.js';
+import { logger } from '../../utils/logger';
 
 export interface Anomaly {
   id: string;
@@ -614,7 +615,7 @@ export class PerformanceAnalyzer extends EventEmitter {
   private setupAnalysis(): void {
     // Run analysis every 30 seconds
     setInterval(() => {
-      this.analyzePerformance().catch(console.error);
+      this.analyzePerformance().catch((err) => logger.error('Error analyzing performance:', { err }));
     }, 30000);
   }
 
