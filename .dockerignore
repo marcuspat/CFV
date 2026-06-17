@@ -1,0 +1,58 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Node dependencies (multi-stage build re-installs from lockfile)
+node_modules
+npm-debug.log*
+yarn-error.log
+.npm
+
+# Environment files — never bake secrets into image
+.env
+.env.*
+!.env.example
+
+# TypeScript build output (builder stage produces dist/)
+dist
+build
+*.tsbuildinfo
+
+# Test artifacts
+coverage
+.nyc_output
+test-results
+playwright-report
+playwright/.cache
+
+# Development tooling
+.eslintcache
+.DS_Store
+*.swp
+*.swo
+.idea
+.vscode
+
+# Logs
+logs
+*.log
+
+# CI / GitHub
+.github
+
+# Docker dev variants
+Dockerfile.dev
+docker-compose.override.yml
+
+# Python (ml-service)
+__pycache__
+*.pyc
+.venv
+venv
+
+# Temp
+tmp
+temp
+.tmp
+uploads
