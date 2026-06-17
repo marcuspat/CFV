@@ -41,6 +41,10 @@ services:
     restart: unless-stopped
     networks:
       - cognitive-fabric-network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
       interval: 30s
@@ -57,21 +61,21 @@ services:
       - POSTGRES_USER=${DB_USER:-postgres}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    # ports removed — app reaches postgres via internal network only
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
     restart: unless-stopped
     networks:
       - cognitive-fabric-network
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-cognitive_fabric}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-
   # Neo4j Graph Database
   neo4j:
     image: neo4j:5.15-community
@@ -83,9 +87,7 @@ services:
       - NEO4J_dbms_memory_heap_initial__size=512m
       - NEO4J_dbms_memory_heap_max__size=2G
       - NEO4J_dbms_memory_pagecache_size=1G
-    ports:
-      - "7474:7474"  # HTTP
-      - "7687:7687"  # Bolt
+    # ports removed — app reaches neo4j via internal network only (bolt://neo4j:7687)
     volumes:
       - neo4j_data:/data
       - neo4j_logs:/logs
@@ -94,6 +96,8 @@ services:
     restart: unless-stopped
     networks:
       - cognitive-fabric-network
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER:-neo4j}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
       interval: 10s
@@ -106,13 +110,14 @@ services:
     image: redis:7-alpine
     container_name: cognitive-fabric-redis
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6379:6379"
+    # ports removed — app reaches redis via internal network only (redis://redis:6379)
     volumes:
       - redis_data:/data
     restart: unless-stopped
     networks:
       - cognitive-fabric-network
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -136,6 +141,8 @@ services:
     restart: unless-stopped
     networks:
       - cognitive-fabric-network
+    security_opt:
+      - no-new-privileges:true
     profiles:
       - production
 
@@ -157,6 +164,8 @@ services:
     restart: unless-stopped
     networks:
       - cognitive-fabric-network
+    security_opt:
+      - no-new-privileges:true
     profiles:
       - ml
 
@@ -172,6 +181,8 @@ services:
     restart: unless-stopped
     networks:
       - cognitive-fabric-network
+    security_opt:
+      - no-new-privileges:true
     profiles:
       - rasa
 
