@@ -3,6 +3,12 @@
  * Achieves 240 FPS target performance with WebGPU/WebGL acceleration
  */
 
+import React, { useRef, useMemo, useEffect, useState, useCallback } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls, Text, Line, Sphere } from '@react-three/drei';
+import * as THREE from 'three';
+import { CognitiveGraph, CognitiveNode, CognitiveEdge, VisualizationState, PerformanceMetrics } from '../types/cognitive';
+
 /* eslint-disable @typescript-eslint/no-namespace */
 declare global {
   namespace JSX {
@@ -22,12 +28,6 @@ declare global {
     }
   }
 }
-
-import React, { useRef, useMemo, useEffect, useState, useCallback } from 'react';
-import { Canvas, useFrame, useThree, RootState } from '@react-three/fiber';
-import { OrbitControls, Text, Line, Sphere } from '@react-three/drei';
-import * as THREE from 'three';
-import { CognitiveGraph, CognitiveNode, CognitiveEdge, VisualizationState, PerformanceMetrics } from '../types/cognitive';
 
 interface CognitiveVisualization3DProps {
   graph: CognitiveGraph;

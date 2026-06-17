@@ -6,7 +6,6 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import {
   Conversation,
-  CognitiveAnalysisResult,
   ProcessingStatus,
 } from '../types/cognitive';
 import {
@@ -20,7 +19,10 @@ import {
   GetAnalysisResultResponse,
   ExportRequest,
   ExportResponse,
-} from '../../../types';
+  AuthResponse,
+  RegisterRequest,
+  User,
+} from '../types';
 
 class ApiService {
   private client: AxiosInstance;
@@ -54,10 +56,11 @@ class ApiService {
         return response;
       },
       (error) => {
-        if (error.response?.status === 401) {
-          // Token expired, clear it and redirect to login
+        const url: string = error.config?.url || '';
+        // Auth endpoints surface 401s to the caller (used by auto-register flow);
+        // a 401 on any other endpoint means an expired session — clear the token.
+        if (error.response?.status === 401 && !url.includes('/auth/')) {
           this.clearToken();
-          window.location.href = '/login';
         } else if (error.response?.status === 429) {
           // Rate limited
           console.warn('Rate limited. Please try again later.');
@@ -83,6 +86,36 @@ class ApiService {
     if (token) {
       this.setToken(token);
     }
+  }
+
+  getToken(): string | null {
+    return this.token;
+  }
+
+  async login(email: string, password: string): Promise<AuthResponse> {
+    const response = await this.client.post('/auth/login', { email, password });
+    this.setToken(response.data.token);
+    return response.data;
+  }
+
+  async register(request: RegisterRequest): Promise<AuthResponse> {
+    const response = await this.client.post('/auth/register', request);
+    this.setToken(response.data.token);
+    return response.data;
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await this.client.post('/auth/logout', {});
+    } catch {
+      // best-effort — clear the local session regardless
+    }
+    this.clearToken();
+  }
+
+  async getCurrentUser(): Promise<User> {
+    const response = await this.client.get('/auth/me');
+    return response.data.user;
   }
 
   // Conversation methods
@@ -126,7 +159,7 @@ class ApiService {
   }
 
   // Analysis methods
-  async startAnalysis(request: StartAnalysisRequest): Promise<StartAnalysisResponse> {
+  async startAnalysis(request: StartAnalysisRequest & { conversationText?: string }): Promise<StartAnalysisResponse> {
     const response = await this.client.post('/analysis/start', request);
     return response.data;
   }
