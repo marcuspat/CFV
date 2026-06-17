@@ -33,11 +33,10 @@ ENV NODE_ENV production
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy the built application
-COPY --from=builder /app/dist ./dist
+# Copy the built application — explicit --chown prevents root-owned files in image
+COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/.env.example ./.env
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 # Create necessary directories
 RUN mkdir -p /app/uploads /app/logs /app/temp && \
