@@ -5,10 +5,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { config } from '../config';
 import { AuthenticationError, AuthorizationError } from './errorHandler';
 import { User, UserRole } from '../../types';
 import { defaultPreferences } from '../services/userRepository';
+import { isAccessTokenRevoked } from '../services/tokenRevocation';
 
 // Extend Request interface to include user
 export interface AuthenticatedRequest extends Request {
@@ -59,6 +61,11 @@ export const authMiddleware = async (
     }
 
     const decoded = verifyAccessToken(token);
+
+    // Reject access tokens that were revoked at logout.
+    if (decoded.jti && (await isAccessTokenRevoked(decoded.jti))) {
+      throw new AuthenticationError('Token has been revoked');
+    }
 
     // Build the request user from the (stateless) token claims. Routes that
     // need the full profile can load it from the user repository.
@@ -121,6 +128,11 @@ export const optionalAuth = async (
 
     const decoded = verifyAccessToken(token);
 
+    // A revoked token is treated as no auth for optional routes.
+    if (decoded.jti && (await isAccessTokenRevoked(decoded.jti))) {
+      return next();
+    }
+
     req.user = {
       id: decoded.userId,
       email: decoded.email,
@@ -145,6 +157,7 @@ export const generateTokens = (user: { id: string; email: string; role: UserRole
     email: user.email,
     role: user.role,
     type: 'access',
+    jti: randomUUID(),
   };
 
   const accessToken = jwt.sign(payload, config.JWT_SECRET, {

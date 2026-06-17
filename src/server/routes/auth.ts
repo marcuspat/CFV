@@ -19,6 +19,8 @@ import { validateBody } from '../middleware/validate';
 import {
   generateTokens,
   verifyRefreshToken,
+  verifyAccessToken,
+  extractTokenFromRequest,
   authMiddleware,
   AuthenticatedRequest,
 } from '../middleware/auth';
@@ -34,7 +36,11 @@ import {
   toPublicUser,
   defaultPreferences,
 } from '../services/userRepository';
-import { revokeRefreshToken, isRefreshTokenRevoked } from '../services/tokenRevocation';
+import {
+  revokeRefreshToken,
+  isRefreshTokenRevoked,
+  revokeAccessToken,
+} from '../services/tokenRevocation';
 
 const router = Router();
 
@@ -206,7 +212,8 @@ router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
-// Logout — revokes the refresh token (from cookie or body) and clears the cookie.
+// Logout — revokes both the refresh token (cookie/body) and the access token
+// (Authorization header) so neither can be reused, then clears the cookie.
 router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
   const refreshToken =
     readCookie(req, REFRESH_COOKIE) ?? ((req.body ?? {}) as { refreshToken?: string }).refreshToken;
@@ -221,6 +228,20 @@ router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
       }
     } catch {
       // Invalid/expired token — nothing to revoke; logout is best-effort.
+    }
+  }
+
+  // Blocklist the presented access token's jti for the access-token lifetime.
+  const accessToken = extractTokenFromRequest(req);
+  if (accessToken) {
+    try {
+      const decoded = verifyAccessToken(accessToken);
+      if (decoded.jti) {
+        const accessTtl = Math.max(1, Math.ceil(durationToMs(config.JWT_EXPIRES_IN) / 1000));
+        await revokeAccessToken(decoded.jti, accessTtl);
+      }
+    } catch {
+      // Invalid/expired access token — nothing to revoke.
     }
   }
 

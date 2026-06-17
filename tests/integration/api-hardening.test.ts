@@ -149,6 +149,33 @@ describe('Authentication (JWT + bcrypt)', () => {
     expect(reuse.status).toBe(401);
   });
 
+  it('blocklists the access token on logout; access-token reuse returns 401', async () => {
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: creds.email, password: creds.password });
+    const accessToken = login.body.token as string;
+    const refreshToken = login.body.refreshToken as string;
+
+    // The access token works on a protected route before logout.
+    const before = await request(app)
+      .get('/api/conversations')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(before.status).toBe(200);
+
+    // Logout presents the access token (Authorization) + refresh token (body).
+    const out = await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ refreshToken });
+    expect(out.status).toBe(200);
+
+    // Reusing the now-blocklisted access token is rejected.
+    const after = await request(app)
+      .get('/api/conversations')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(after.status).toBe(401);
+  });
+
   it('persists the refresh token as an httpOnly cookie; cookie-based logout revokes it', async () => {
     const agent = request.agent(app);
 
