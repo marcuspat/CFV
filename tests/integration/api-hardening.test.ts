@@ -254,3 +254,43 @@ describe('API hardening — rate limiting on /api/analysis', () => {
     expect(statuses[10]).toBe(429);
   });
 });
+
+describe('Conversation persistence', () => {
+  let app: Application;
+
+  beforeAll(async () => {
+    app = await buildApp();
+  });
+
+  it('creates, retrieves, and lists a conversation (transcript round-trips)', async () => {
+    const create = await request(app)
+      .post('/api/conversations')
+      .set('Authorization', bearer())
+      .send({ title: 'Persisted convo', transcript: ['line one', 'line two'], metadata: { domain: 'testing' } });
+    expect(create.status).toBe(201);
+    const id = create.body.conversationId as string;
+    expect(id).toBeTruthy();
+
+    const got = await request(app)
+      .get(`/api/conversations/${id}`)
+      .set('Authorization', bearer());
+    expect(got.status).toBe(200);
+    expect(got.body.conversation.title).toBe('Persisted convo');
+    expect(got.body.conversation.transcript).toEqual(['line one', 'line two']);
+    expect(got.body.conversation.metadata.domain).toBe('testing');
+
+    const listed = await request(app).get('/api/conversations').set('Authorization', bearer());
+    expect(listed.status).toBe(200);
+    expect(listed.body.total).toBeGreaterThanOrEqual(1);
+    expect(
+      (listed.body.conversations as Array<{ id: string }>).some((c) => c.id === id)
+    ).toBe(true);
+  });
+
+  it('returns 404 for an unknown conversation id', async () => {
+    const got = await request(app)
+      .get('/api/conversations/00000000-0000-0000-0000-000000000000')
+      .set('Authorization', bearer());
+    expect(got.status).toBe(404);
+  });
+});

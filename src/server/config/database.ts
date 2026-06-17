@@ -235,10 +235,28 @@ class DatabaseManager {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         title VARCHAR(500) NOT NULL,
         user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        transcript JSONB NOT NULL DEFAULT '[]'::jsonb,
         metadata JSONB DEFAULT '{}',
         processing_status VARCHAR(50) DEFAULT 'pending',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+
+      // Idempotent for databases created before `transcript` was added.
+      `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS transcript JSONB NOT NULL DEFAULT '[]'::jsonb`,
+
+      `CREATE TABLE IF NOT EXISTS analysis_jobs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        conversation_id UUID NOT NULL,
+        user_id UUID,
+        status VARCHAR(50) NOT NULL DEFAULT 'processing',
+        progress INTEGER NOT NULL DEFAULT 0,
+        current_step VARCHAR(255),
+        estimated_time_remaining INTEGER,
+        result JSONB,
+        error TEXT,
+        started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        completed_at TIMESTAMP WITH TIME ZONE
       )`,
 
       `CREATE TABLE IF NOT EXISTS conversation_transcripts (
@@ -307,6 +325,9 @@ class DatabaseManager {
       'CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(processing_status)',
       'CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_analysis_jobs_conversation_id ON analysis_jobs(conversation_id)',
+      'CREATE INDEX IF NOT EXISTS idx_analysis_jobs_user_id ON analysis_jobs(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status ON analysis_jobs(status)',
       'CREATE INDEX IF NOT EXISTS idx_cognitive_elements_analysis_id ON cognitive_elements(analysis_id)',
       'CREATE INDEX IF NOT EXISTS idx_cognitive_elements_type ON cognitive_elements(element_type)',
       'CREATE INDEX IF NOT EXISTS idx_cognitive_elements_confidence ON cognitive_elements(confidence)',
