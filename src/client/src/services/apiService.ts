@@ -30,9 +30,10 @@ class ApiService {
 
   constructor() {
     this.client = axios.create({
-      // Read the API base URL from the environment; fall back to '' so requests
-      // are issued relative to the current origin (dev/prod reverse-proxy setups).
-      baseURL: process.env.REACT_APP_API_URL || '',
+      // Read the API base URL from the environment; fall back to the relative
+      // '/api' path so requests go same-origin and are forwarded by the CRA dev
+      // proxy (package.json "proxy") / a production reverse proxy to the backend.
+      baseURL: process.env.REACT_APP_API_URL || '/api',
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',

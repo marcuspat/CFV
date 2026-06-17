@@ -29,6 +29,7 @@
     "test:chaos": "jest tests/chaos-engineering --testTimeout=300000 --verbose",
     "test:validation": "jest tests/error-handling/comprehensive-error-tests.ts --testNamePattern='Input Validation'",
     "test:resilience": "npm run test:chaos && npm run test:error-handling",
+    "test:integration:api": "jest --config jest.config.integration.cjs",
     "build": "tsc",
     "lint": "echo 'Add linting here'",
     "lint:fix": "eslint src tests --ext .ts,.tsx,.js,.jsx --fix",

@@ -45,7 +45,11 @@ class App {
 
     this.initializeMonitoring();
     this.initializeMiddlewares();
-    this.initializeErrorHandling();
+    // NOTE: error handling is registered at the END of initializeRoutes(), not
+    // here — Express only invokes an error-handling middleware for errors thrown
+    // by middleware/routes registered BEFORE it. Routes are mounted later (in
+    // start() -> initializeRoutes()), so registering errorHandler here would
+    // leave all route errors to fall through to Express's default handler.
   }
 
   private initializeMonitoring(): void {
@@ -163,6 +167,9 @@ class App {
         timestamp: new Date().toISOString(),
       });
     });
+
+    // Error handling must come last so it can catch errors from the routes above.
+    this.initializeErrorHandling();
   }
 
   private initializeErrorHandling(): void {
