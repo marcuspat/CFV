@@ -15,9 +15,8 @@ async function shutdown(signal: string): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
-  logger.info({ signal }, 'Shutdown signal received — draining in-flight requests');
+  logger.info(`Shutdown signal received [${signal}] — draining in-flight requests`);
 
-  // Force exit if graceful drain takes too long (e.g. keep-alive connections)
   const forceExitTimer = setTimeout(() => {
     logger.error('Graceful shutdown timed out after 10s — forcing exit');
     process.exit(1);
@@ -26,51 +25,42 @@ async function shutdown(signal: string): Promise<void> {
 
   try {
     if (app) {
-      // app.stop() closes the HTTP server (drains in-flight requests),
-      // closes the PostgreSQL pool, and any other managed connections.
       await app.stop();
     }
     clearTimeout(forceExitTimer);
     logger.info('Graceful shutdown complete');
     process.exit(0);
   } catch (err) {
-    logger.error({ err }, 'Error during shutdown');
+    logger.error(`Error during shutdown: ${String(err)}`);
     process.exit(1);
   }
 }
 
 async function startServer(): Promise<void> {
   try {
-    // Validate configuration
     validateConfig();
 
-    logger.info('Starting Cognitive Fabric Visualizer server', {
-      version: '1.0.0',
-      environment: config.NODE_ENV,
-      port: config.PORT,
-    });
+    logger.info(`Starting Cognitive Fabric Visualizer server — env=${config.NODE_ENV} port=${config.PORT}`);
 
-    // Create and start application
     app = new App();
     await app.start();
 
-    logger.info({ port: config.PORT }, 'Server ready and accepting connections');
+    logger.info(`Server ready and accepting connections on port ${config.PORT}`);
 
-    // Register signal handlers AFTER server is up so app reference is valid
     process.on('SIGTERM', () => { void shutdown('SIGTERM'); });
     process.on('SIGINT',  () => { void shutdown('SIGINT'); });
 
     process.on('uncaughtException', (err) => {
-      logger.error({ err }, 'Uncaught exception — initiating shutdown');
+      logger.error(`Uncaught exception — initiating shutdown: ${String(err)}`);
       void shutdown('uncaughtException');
     });
 
     process.on('unhandledRejection', (reason) => {
-      logger.error({ reason }, 'Unhandled rejection — initiating shutdown');
+      logger.error(`Unhandled rejection — initiating shutdown: ${String(reason)}`);
       void shutdown('unhandledRejection');
     });
   } catch (err) {
-    logger.error({ err }, 'Failed to start server');
+    logger.error(`Failed to start server: ${String(err)}`);
     process.exit(1);
   }
 }
