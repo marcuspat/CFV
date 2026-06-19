@@ -10,6 +10,7 @@ import { promisify } from 'util';
 import { exec } from 'child_process';
 import { metricsCollector } from './MetricsCollector.js';
 import { DEFAULT_MONITORING_CONFIG } from '../../../config/monitoring.js';
+import { logger } from '../../utils/logger';
 
 const execAsync = promisify(exec);
 
@@ -267,14 +268,12 @@ export class NetworkMonitor extends EventEmitter {
     const oldest = relevantMetrics[0];
     const newest = relevantMetrics[relevantMetrics.length - 1];
 
-    const calculateTrend = (oldValue: number, newValue: number, inverse: boolean = false) => {
+    const calculateTrend = (oldValue: number, newValue: number, inverse: boolean = false): { trend: 'improving' | 'stable' | 'degrading'; change: number } => {
       const change = ((newValue - oldValue) / oldValue) * 100;
-      return {
-        trend: Math.abs(change) > 5 ?
-          (inverse ? (change < 0 ? 'improving' : 'degrading') : (change > 0 ? 'improving' : 'degrading'))
-          : 'stable',
-        change
-      };
+      const trend: 'improving' | 'stable' | 'degrading' = Math.abs(change) > 5 ?
+        (inverse ? (change < 0 ? 'improving' : 'degrading') : (change > 0 ? 'improving' : 'degrading'))
+        : 'stable';
+      return { trend, change };
     };
 
     return {
@@ -644,13 +643,13 @@ export class NetworkMonitor extends EventEmitter {
           const name = match[1];
           const flags = match[2];
           const mtu = parseInt(match[3], 10);
-          const status = flags.includes('UP') ? 'up' : 'down';
+          const status: 'up' | 'down' = flags.includes('UP') ? 'up' : 'down';
 
           interfaces.push({
             name,
             status,
             speed: 1000, // Default - would need actual speed
-            duplex: 'full',
+            duplex: 'full' as const,
             mtu,
             errors: 0,
             dropped: 0,
@@ -793,7 +792,7 @@ export class NetworkMonitor extends EventEmitter {
 
         this.emit('metrics', metrics);
       } catch (error) {
-        console.error('Error collecting network metrics:', error);
+        logger.error('Error collecting network metrics:', { err: error });
       }
     }, this.config.interval * 2); // Network monitoring less frequent
   }

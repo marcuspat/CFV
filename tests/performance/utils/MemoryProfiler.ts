@@ -129,9 +129,9 @@ export class MemoryProfiler {
     // Listen for garbage collection events
     if (global.gc) {
       const originalGC = global.gc;
-      global.gc = () => {
+      (global as any).gc = async () => {
         const start = performance.now();
-        originalGC();
+        await originalGC();
         const duration = performance.now() - start;
         console.log(`Manual GC completed in ${duration.toFixed(2)}ms`);
         this.lastGCStats = { timestamp: Date.now(), duration };

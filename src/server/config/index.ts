@@ -5,6 +5,7 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
 import { DatabaseConfiguration } from '../../types';
+import { logger } from '../utils/logger';
 
 // Load environment variables
 dotenv.config();
@@ -12,15 +13,18 @@ dotenv.config();
 // Configuration Schema
 const ConfigSchema = z.object({
   // Server Configuration
-  PORT: z.preprocess((val) => Number(val), z.number().default(3001)),
+  PORT: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(3001)),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 
   // Database Configuration
   DB_HOST: z.string().default('localhost'),
-  DB_PORT: z.preprocess((val) => Number(val), z.number().default(5432)),
+  DB_PORT: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(5432)),
   DB_NAME: z.string().default('cognitive_fabric'),
   DB_USER: z.string().default('postgres'),
   DB_PASSWORD: z.string().default('password'),
+  // Full Postgres connection string (preferred in prod; e.g. Railway/Heroku).
+  // When set it takes precedence over the discrete DB_* fields above.
+  DATABASE_URL: z.string().optional(),
 
   // Neo4j Configuration
   NEO4J_URI: z.string().default('bolt://localhost:7687'),
@@ -31,11 +35,11 @@ const ConfigSchema = z.object({
   // Redis Configuration
   REDIS_URL: z.string().default('redis://localhost:6379'),
   REDIS_KEY_PREFIX: z.string().default('cfv:'),
-  REDIS_TTL: z.preprocess((val) => Number(val), z.number().default(3600)),
+  REDIS_TTL: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(3600)),
 
   // JWT Configuration
   JWT_SECRET: z.string().min(32, 'JWT secret must be at least 32 characters'),
-  JWT_EXPIRES_IN: z.string().default('7d'),
+  JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
 
   // API Keys
@@ -45,25 +49,27 @@ const ConfigSchema = z.object({
   RASA_WEBHOOK_URL: z.string().optional(),
 
   // File Upload Configuration
-  MAX_FILE_SIZE: z.preprocess((val) => Number(val), z.number().default(52428800)), // 50MB
+  MAX_FILE_SIZE: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(52428800)), // 50MB
   UPLOAD_DIR: z.string().default('uploads'),
 
   // Performance Configuration
-  WEBSOCKET_HEARTBEAT: z.preprocess((val) => Number(val), z.number().default(30000)),
-  MAX_CONCURRENT_CONNECTIONS: z.preprocess((val) => Number(val), z.number().default(100)),
-  MAX_CONCURRENT_ANALYSES: z.preprocess((val) => Number(val), z.number().default(10)),
+  WEBSOCKET_HEARTBEAT: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(30000)),
+  MAX_CONCURRENT_CONNECTIONS: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(100)),
+  MAX_CONCURRENT_ANALYSES: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(10)),
 
   // Cognitive Processing Configuration
-  COGNITIVE_PROCESSING_TIMEOUT: z.preprocess((val) => Number(val), z.number().default(300000)), // 5 minutes
+  COGNITIVE_PROCESSING_TIMEOUT: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(300000)), // 5 minutes
   ML_SERVICE_URL: z.string().optional(),
 
   // Verification Threshold
-  VERIFICATION_THRESHOLD: z.preprocess((val) => Number(val), z.number().default(0.95)),
+  VERIFICATION_THRESHOLD: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(0.95)),
 
   // Security Configuration
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
-  RATE_LIMIT_WINDOW_MS: z.preprocess((val) => Number(val), z.number().default(900000)), // 15 minutes
-  RATE_LIMIT_MAX_REQUESTS: z.preprocess((val) => Number(val), z.number().default(100)),
+  // Comma-separated explicit allowlist of permitted browser origins (no wildcards).
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
+  RATE_LIMIT_WINDOW_MS: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(900000)), // 15 minutes
+  RATE_LIMIT_MAX_REQUESTS: z.preprocess((val) => (val === undefined || val === '' ? undefined : Number(val)), z.number().default(100)),
 
   // Logging Configuration
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
@@ -81,6 +87,7 @@ export { config };
 export function getDatabaseConfig(): DatabaseConfiguration {
   return {
     postgres: {
+      connectionString: config.DATABASE_URL,
       host: config.DB_HOST,
       port: config.DB_PORT,
       database: config.DB_NAME,
@@ -125,8 +132,10 @@ export function validateConfig(): void {
   const missingRecommended = recommendedEnvVars.filter(varName => !process.env[varName]);
 
   if (missingRecommended.length > 0) {
-    console.warn(`Missing recommended environment variables: ${missingRecommended.join(', ')}`);
-    console.warn('Some features may not work correctly without these variables.');
+    logger.warn('Missing recommended environment variables', {
+      missing: missingRecommended,
+      note: 'Some features may not work correctly without these variables.',
+    });
   }
 }
 
@@ -149,7 +158,9 @@ export function getServerConfig() {
     port: config.PORT,
     env: config.NODE_ENV,
     cors: {
-      origin: isDevelopment() ? ['http://localhost:3000', 'http://localhost:5173'] : config.CORS_ORIGIN.split(','),
+      // Explicit allowlist from CORS_ORIGINS (no wildcard). credentials:true is
+      // required so the browser sends/stores the httpOnly refresh_token cookie.
+      origin: config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
       credentials: true,
     },
     rateLimit: {
@@ -159,17 +170,24 @@ export function getServerConfig() {
         error: 'Too many requests from this IP, please try again later.',
       },
     },
-    helmet: isProduction() ? {
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
-          scriptSrc: ["'self'"],
-          imgSrc: ["'self'", "data:", "https:"],
-          connectSrc: ["'self'", "ws:", "wss:"],
-        },
-      },
-    } : false,
+    // Helmet is always enabled for baseline security headers. The stricter
+    // Content-Security-Policy is only applied in production to avoid breaking
+    // the dev proxy / hot-reload; CORP is set to cross-origin so the separately
+    // hosted frontend can read API responses.
+    helmet: {
+      contentSecurityPolicy: isProduction()
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              styleSrc: ["'self'", "'unsafe-inline'"],
+              scriptSrc: ["'self'"],
+              imgSrc: ["'self'", 'data:', 'https:'],
+              connectSrc: ["'self'", 'ws:', 'wss:'],
+            },
+          }
+        : false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' as const },
+    },
   };
 }
 

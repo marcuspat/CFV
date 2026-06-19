@@ -275,7 +275,6 @@ export class ExecutionTimer {
       this.endExecution(id);
 
       if (timing) {
-        timing.result = result;
         metricsCollector.incrementCounter('database.queries', 1, {
           queryType,
           database,
@@ -332,7 +331,6 @@ export class ExecutionTimer {
       this.endExecution(id);
 
       if (timing) {
-        timing.result = result;
         metricsCollector.incrementCounter('api.requests', 1, {
           method,
           status: 'success'
@@ -382,7 +380,6 @@ export class ExecutionTimer {
       this.endExecution(id);
 
       if (timing) {
-        timing.result = result;
         metricsCollector.incrementCounter('agent.executions', 1, {
           agentType,
           topology: topology || 'unknown',
@@ -544,7 +541,7 @@ export class ExecutionTimer {
       }
     });
 
-    this.performanceObserver.observe({ entryTypes: ['measure', 'navigation', 'resource'] });
+    this.performanceObserver.observe({ entryTypes: ['measure'] });
   }
 
   private inferCategory(name: string): string {

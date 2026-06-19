@@ -7,6 +7,7 @@ import { Pool, PoolConfig } from 'pg';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import { createClient, RedisClientType } from 'redis';
 import { DatabaseConfiguration } from '../../types';
+import { logger } from '../utils/logger';
 
 class DatabaseManager {
   private postgresPool?: Pool;
@@ -16,7 +17,7 @@ class DatabaseManager {
 
   async initialize(config: DatabaseConfiguration): Promise<void> {
     try {
-      console.log('Initializing database connections...');
+      logger.info('Initializing database connections...');
 
       // Initialize PostgreSQL
       await this.initializePostgres(config.postgres);
@@ -28,25 +29,35 @@ class DatabaseManager {
       await this.initializeRedis(config.redis);
 
       this.isInitialized = true;
-      console.log('All database connections initialized successfully');
+      logger.info('All database connections initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize database connections:', error);
+      logger.error('Failed to initialize database connections', { err: error });
       throw error;
     }
   }
 
   private async initializePostgres(config: DatabaseConfiguration['postgres']): Promise<void> {
-    const poolConfig: PoolConfig = {
-      host: config.host,
-      port: config.port,
-      database: config.database,
-      user: config.username,
-      password: config.password,
-      ssl: config.ssl,
-      max: config.maxConnections || 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
-    };
+    // Prefer a full connection string (DATABASE_URL) when provided; otherwise
+    // fall back to the discrete host/port/credentials fields.
+    const poolConfig: PoolConfig = config.connectionString
+      ? {
+          connectionString: config.connectionString,
+          ssl: config.ssl ? { rejectUnauthorized: false } : undefined,
+          max: config.maxConnections || 20,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000,
+        }
+      : {
+          host: config.host,
+          port: config.port,
+          database: config.database,
+          user: config.username,
+          password: config.password,
+          ssl: config.ssl,
+          max: config.maxConnections || 20,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000,
+        };
 
     this.postgresPool = new Pool(poolConfig);
 
@@ -54,7 +65,7 @@ class DatabaseManager {
     const client = await this.postgresPool.connect();
     try {
       await client.query('SELECT NOW()');
-      console.log('PostgreSQL connection established');
+      logger.info('PostgreSQL connection established');
     } finally {
       client.release();
     }
@@ -77,7 +88,7 @@ class DatabaseManager {
     });
     try {
       await session.run('RETURN 1');
-      console.log('Neo4j connection established');
+      logger.info('Neo4j connection established');
     } finally {
       await session.close();
     }
@@ -92,11 +103,11 @@ class DatabaseManager {
     // Key prefix will be handled in Redis operations
 
     this.redisClient.on('error', (error) => {
-      console.error('Redis Client Error:', error);
+      logger.error('Redis Client Error', { err: error });
     });
 
     await this.redisClient.connect();
-    console.log('Redis connection established');
+    logger.info('Redis connection established');
   }
 
   // PostgreSQL Methods
@@ -184,7 +195,7 @@ class DatabaseManager {
       await this.query('SELECT 1');
       health.postgres = true;
     } catch (error) {
-      console.error('PostgreSQL health check failed:', error);
+      logger.error('PostgreSQL health check failed', { err: error });
     }
 
     try {
@@ -192,7 +203,7 @@ class DatabaseManager {
       await this.runCypherQuery('RETURN 1');
       health.neo4j = true;
     } catch (error) {
-      console.error('Neo4j health check failed:', error);
+      logger.error('Neo4j health check failed', { err: error });
     }
 
     try {
@@ -200,7 +211,7 @@ class DatabaseManager {
       await this.redis!.ping();
       health.redis = true;
     } catch (error) {
-      console.error('Redis health check failed:', error);
+      logger.error('Redis health check failed', { err: error });
     }
 
     return health;
@@ -208,12 +219,12 @@ class DatabaseManager {
 
   // Migration Methods
   async runMigrations(): Promise<void> {
-    console.log('Running database migrations...');
+    logger.info('Running database migrations...');
 
     await this.runPostgresMigrations();
     await this.runNeo4jMigrations();
 
-    console.log('Migrations completed successfully');
+    logger.info('Migrations completed successfully');
   }
 
   private async runPostgresMigrations(): Promise<void> {
@@ -235,10 +246,28 @@ class DatabaseManager {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         title VARCHAR(500) NOT NULL,
         user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        transcript JSONB NOT NULL DEFAULT '[]'::jsonb,
         metadata JSONB DEFAULT '{}',
         processing_status VARCHAR(50) DEFAULT 'pending',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )`,
+
+      // Idempotent for databases created before `transcript` was added.
+      `ALTER TABLE conversations ADD COLUMN IF NOT EXISTS transcript JSONB NOT NULL DEFAULT '[]'::jsonb`,
+
+      `CREATE TABLE IF NOT EXISTS analysis_jobs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        conversation_id UUID NOT NULL,
+        user_id UUID,
+        status VARCHAR(50) NOT NULL DEFAULT 'processing',
+        progress INTEGER NOT NULL DEFAULT 0,
+        current_step VARCHAR(255),
+        estimated_time_remaining INTEGER,
+        result JSONB,
+        error TEXT,
+        started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        completed_at TIMESTAMP WITH TIME ZONE
       )`,
 
       `CREATE TABLE IF NOT EXISTS conversation_transcripts (
@@ -301,9 +330,15 @@ class DatabaseManager {
 
     // Create indexes
     const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email))',
+      'CREATE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))',
+      'CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)',
       'CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(processing_status)',
       'CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_analysis_jobs_conversation_id ON analysis_jobs(conversation_id)',
+      'CREATE INDEX IF NOT EXISTS idx_analysis_jobs_user_id ON analysis_jobs(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status ON analysis_jobs(status)',
       'CREATE INDEX IF NOT EXISTS idx_cognitive_elements_analysis_id ON cognitive_elements(analysis_id)',
       'CREATE INDEX IF NOT EXISTS idx_cognitive_elements_type ON cognitive_elements(element_type)',
       'CREATE INDEX IF NOT EXISTS idx_cognitive_elements_confidence ON cognitive_elements(confidence)',
@@ -345,21 +380,21 @@ class DatabaseManager {
 
   // Cleanup Methods
   async close(): Promise<void> {
-    console.log('Closing database connections...');
+    logger.info('Closing database connections...');
 
     if (this.postgresPool) {
       await this.postgresPool.end();
-      console.log('PostgreSQL connection closed');
+      logger.info('PostgreSQL connection closed');
     }
 
     if (this.neo4jDriver) {
       await this.neo4jDriver.close();
-      console.log('Neo4j connection closed');
+      logger.info('Neo4j connection closed');
     }
 
     if (this.redisClient) {
       await this.redisClient.quit();
-      console.log('Redis connection closed');
+      logger.info('Redis connection closed');
     }
 
     this.isInitialized = false;

@@ -9,6 +9,7 @@ import { join } from 'path';
 import { metricsCollector } from './MetricsCollector.js';
 import { performanceAnalyzer } from './PerformanceAnalyzer.js';
 import { DEFAULT_MONITORING_CONFIG } from '../../../config/monitoring.js';
+import { logger } from '../../utils/logger';
 
 export interface BaselineMetric {
   name: string;
@@ -637,7 +638,7 @@ export class BaselineManager extends EventEmitter {
           try {
             await this.buildBaseline(baseline.id);
           } catch (error) {
-            console.error(`Failed to rebuild baseline ${baseline.id}:`, error);
+            logger.error(`Failed to rebuild baseline ${baseline.id}:`, { err: error });
           }
         }
       }
@@ -655,7 +656,7 @@ export class BaselineManager extends EventEmitter {
       const data = JSON.stringify(Array.from(this.baselines.values()), null, 2);
       await fs.writeFile(filePath, data, 'utf-8');
     } catch (error) {
-      console.error('Error saving baselines:', error);
+      logger.error('Error saving baselines:', { err: error });
     }
   }
 
@@ -669,9 +670,9 @@ export class BaselineManager extends EventEmitter {
         this.baselines.set(baseline.id, baseline);
       }
 
-      console.log(`Loaded ${baselines.length} baselines`);
+      logger.info(`Loaded ${baselines.length} baselines`);
     } catch (error) {
-      console.log('No existing baselines found, starting fresh');
+      logger.info('No existing baselines found, starting fresh');
     }
   }
 

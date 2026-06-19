@@ -9,6 +9,7 @@ import { createClient } from 'redis';
 import { Driver, Session } from 'neo4j-driver';
 import { metricsCollector } from './MetricsCollector.js';
 import { DEFAULT_MONITORING_CONFIG } from '../../../config/monitoring.js';
+import { logger } from '../../utils/logger';
 
 export interface DatabaseMetrics {
   postgres?: PostgresMetrics;
@@ -326,7 +327,7 @@ export class DatabaseMonitor extends EventEmitter {
           name,
           database: 'postgres',
           totalConnections: pool.totalCount,
-          activeConnections: pool.activeCount,
+          activeConnections: pool.totalCount - pool.idleCount,
           idleConnections: pool.idleCount,
           waitingClients: pool.waitingCount,
           maxConnections: pool.options.max || 10
@@ -437,10 +438,8 @@ export class DatabaseMonitor extends EventEmitter {
     const calculateTrend = (newValue: number, oldValue: number) => {
       if (oldValue === 0) return { trend: 'stable' as const, change: 0 };
       const change = ((newValue - oldValue) / oldValue) * 100;
-      return {
-        trend: Math.abs(change) > 10 ? (change > 0 ? 'up' : 'down') : 'stable',
-        change
-      };
+      const trend: 'up' | 'down' | 'stable' = Math.abs(change) > 10 ? (change > 0 ? 'up' : 'down') : 'stable';
+      return { trend, change };
     };
 
     return {
@@ -523,17 +522,17 @@ export class DatabaseMonitor extends EventEmitter {
 
       return {
         connections: {
-          active: parseInt(connStats.active_connections),
-          idle: parseInt(connStats.idle_connections),
-          total: parseInt(connStats.total_connections),
+          active: Number(connStats.active_connections) || 0,
+          idle: Number(connStats.idle_connections) || 0,
+          total: Number(connStats.total_connections) || 0,
           max: pool.options.max || 10,
-          waiting: parseInt(connStats.waiting_connections)
+          waiting: Number(connStats.waiting_connections) || 0
         },
         queries: {
-          total: parseInt(queryStats.total_calls) || 0,
-          active: parseInt(connStats.active_connections),
-          averageDuration: parseFloat(queryStats.avg_duration) || 0,
-          slowQueries: parseInt(queryStats.slow_queries) || 0,
+          total: Number(queryStats.total_calls) || 0,
+          active: Number(connStats.active_connections) || 0,
+          averageDuration: Number(queryStats.avg_duration) || 0,
+          slowQueries: Number(queryStats.slow_queries) || 0,
           failedQueries: this.queryTraces.filter(t => t.database === 'postgres' && t.status === 'error').length,
           callsPerSecond: 0 // Would need time-based calculation
         },
@@ -561,7 +560,7 @@ export class DatabaseMonitor extends EventEmitter {
         }
       };
     } catch (error) {
-      console.error('Error getting PostgreSQL metrics:', error);
+      logger.error('Error getting PostgreSQL metrics:', { err: error });
       // Return default metrics on error
       return {
         connections: { active: 0, idle: 0, total: 0, max: 10, waiting: 0 },
@@ -639,7 +638,7 @@ export class DatabaseMonitor extends EventEmitter {
         }
       };
     } catch (error) {
-      console.error('Error getting Redis metrics:', error);
+      logger.error('Error getting Redis metrics:', { err: error });
       return {
         connections: { connected: 0, blocked: 0, maxConnections: 10000 },
         memory: { used: 0, peak: 0, rss: 0, fragmentation: 0 },
@@ -690,7 +689,7 @@ export class DatabaseMonitor extends EventEmitter {
         }
       };
     } catch (error) {
-      console.error('Error getting Neo4j metrics:', error);
+      logger.error('Error getting Neo4j metrics:', { err: error });
       return {
         connections: { active: 0, idle: 0, total: 0, max: 100 },
         queries: { total: 0, averageDuration: 0, slowQueries: 0, failedQueries: 0 },
@@ -813,7 +812,7 @@ export class DatabaseMonitor extends EventEmitter {
 
         this.emit('metrics', metrics);
       } catch (error) {
-        console.error('Error collecting database metrics:', error);
+        logger.error('Error collecting database metrics:', { err: error });
       }
     }, this.config.interval * 3); // Database monitoring less frequent
   }
@@ -868,7 +867,7 @@ export class DatabaseMonitor extends EventEmitter {
           await (connection as Driver).close();
         }
       } catch (error) {
-        console.error(`Error closing connection ${name}:`, error);
+        logger.error(`Error closing connection ${name}:`, { err: error });
       }
     }
 

@@ -16,6 +16,7 @@ import {
   initializeMonitoring,
   shutdownMonitoring
 } from '../services/monitoring/index.js';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -78,7 +79,7 @@ router.get('/overview', async (req: Request, res: Response) => {
 
     res.json(overview);
   } catch (error) {
-    console.error('Error getting monitoring overview:', error);
+    logger.error('Error getting monitoring overview:', { err: error });
     res.status(500).json({ error: 'Failed to get monitoring overview' });
   }
 });
@@ -102,7 +103,7 @@ router.get('/metrics', (req: Request, res: Response) => {
 
     res.json(metrics);
   } catch (error) {
-    console.error('Error getting metrics:', error);
+    logger.error('Error getting metrics:', { err: error });
     res.status(500).json({ error: 'Failed to get metrics' });
   }
 });
@@ -126,7 +127,7 @@ router.get('/metrics/history', (req: Request, res: Response) => {
 
     res.json(filteredHistory);
   } catch (error) {
-    console.error('Error getting metrics history:', error);
+    logger.error('Error getting metrics history:', { err: error });
     res.status(500).json({ error: 'Failed to get metrics history' });
   }
 });
@@ -140,7 +141,7 @@ router.get('/performance', async (req: Request, res: Response) => {
     const report = await performanceAnalyzer.analyzePerformance();
     res.json(report);
   } catch (error) {
-    console.error('Error getting performance analysis:', error);
+    logger.error('Error getting performance analysis:', { err: error });
     res.status(500).json({ error: 'Failed to get performance analysis' });
   }
 });
@@ -162,7 +163,7 @@ router.get('/performance/trends', (req: Request, res: Response) => {
 
     res.json(trends);
   } catch (error) {
-    console.error('Error getting performance trends:', error);
+    logger.error('Error getting performance trends:', { err: error });
     res.status(500).json({ error: 'Failed to get performance trends' });
   }
 });
@@ -183,7 +184,7 @@ router.get('/resources', async (req: Request, res: Response) => {
       alerts
     });
   } catch (error) {
-    console.error('Error getting resource metrics:', error);
+    logger.error('Error getting resource metrics:', { err: error });
     res.status(500).json({ error: 'Failed to get resource metrics' });
   }
 });
@@ -204,7 +205,7 @@ router.get('/network', async (req: Request, res: Response) => {
       activeTests
     });
   } catch (error) {
-    console.error('Error getting network metrics:', error);
+    logger.error('Error getting network metrics:', { err: error });
     res.status(500).json({ error: 'Failed to get network metrics' });
   }
 });
@@ -223,7 +224,7 @@ router.post('/network/test', async (req: Request, res: Response) => {
     const test = await networkMonitor.runTest(type, target);
     res.json(test);
   } catch (error) {
-    console.error('Error running network test:', error);
+    logger.error('Error running network test:', { err: error });
     res.status(500).json({ error: 'Failed to run network test' });
   }
 });
@@ -250,7 +251,7 @@ router.get('/database', async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('Error getting database metrics:', error);
+    logger.error('Error getting database metrics:', { err: error });
     res.status(500).json({ error: 'Failed to get database metrics' });
   }
 });
@@ -288,7 +289,7 @@ router.get('/api', (req: Request, res: Response) => {
       trends
     });
   } catch (error) {
-    console.error('Error getting API metrics:', error);
+    logger.error('Error getting API metrics:', { err: error });
     res.status(500).json({ error: 'Failed to get API metrics' });
   }
 });
@@ -311,7 +312,7 @@ router.get('/agents', async (req: Request, res: Response) => {
       trends
     });
   } catch (error) {
-    console.error('Error getting agent metrics:', error);
+    logger.error('Error getting agent metrics:', { err: error });
     res.status(500).json({ error: 'Failed to get agent metrics' });
   }
 });
@@ -337,7 +338,7 @@ router.get('/alerts', (req: Request, res: Response) => {
       statistics
     });
   } catch (error) {
-    console.error('Error getting alerts:', error);
+    logger.error('Error getting alerts:', { err: error });
     res.status(500).json({ error: 'Failed to get alerts' });
   }
 });
@@ -352,7 +353,7 @@ router.post('/alerts', (req: Request, res: Response) => {
     const alertId = alertingSystem.createAlert(alertData);
     res.status(201).json({ id: alertId, message: 'Alert created successfully' });
   } catch (error) {
-    console.error('Error creating alert:', error);
+    logger.error('Error creating alert:', { err: error });
     res.status(500).json({ error: 'Failed to create alert' });
   }
 });
@@ -377,7 +378,7 @@ router.post('/alerts/:id/acknowledge', (req: Request, res: Response) => {
 
     res.json({ message: 'Alert acknowledged successfully' });
   } catch (error) {
-    console.error('Error acknowledging alert:', error);
+    logger.error('Error acknowledging alert:', { err: error });
     res.status(500).json({ error: 'Failed to acknowledge alert' });
   }
 });
@@ -398,7 +399,7 @@ router.post('/alerts/:id/resolve', (req: Request, res: Response) => {
 
     res.json({ message: 'Alert resolved successfully' });
   } catch (error) {
-    console.error('Error resolving alert:', error);
+    logger.error('Error resolving alert:', { err: error });
     res.status(500).json({ error: 'Failed to resolve alert' });
   }
 });
@@ -412,7 +413,7 @@ router.get('/alerts/rules', (req: Request, res: Response) => {
     const rules = alertingSystem.getRules();
     res.json(rules);
   } catch (error) {
-    console.error('Error getting alert rules:', error);
+    logger.error('Error getting alert rules:', { err: error });
     res.status(500).json({ error: 'Failed to get alert rules' });
   }
 });
@@ -427,7 +428,7 @@ router.post('/alerts/rules', (req: Request, res: Response) => {
     const ruleId = alertingSystem.addRule(ruleData);
     res.status(201).json({ id: ruleId, message: 'Alert rule created successfully' });
   } catch (error) {
-    console.error('Error creating alert rule:', error);
+    logger.error('Error creating alert rule:', { err: error });
     res.status(500).json({ error: 'Failed to create alert rule' });
   }
 });
@@ -448,7 +449,7 @@ router.put('/alerts/rules/:id', (req: Request, res: Response) => {
 
     res.json({ message: 'Alert rule updated successfully' });
   } catch (error) {
-    console.error('Error updating alert rule:', error);
+    logger.error('Error updating alert rule:', { err: error });
     res.status(500).json({ error: 'Failed to update alert rule' });
   }
 });
@@ -467,7 +468,7 @@ router.delete('/alerts/rules/:id', (req: Request, res: Response) => {
 
     res.json({ message: 'Alert rule deleted successfully' });
   } catch (error) {
-    console.error('Error deleting alert rule:', error);
+    logger.error('Error deleting alert rule:', { err: error });
     res.status(500).json({ error: 'Failed to delete alert rule' });
   }
 });
@@ -481,7 +482,7 @@ router.get('/alerts/channels', (req: Request, res: Response) => {
     const channels = alertingSystem.getChannels();
     res.json(channels);
   } catch (error) {
-    console.error('Error getting notification channels:', error);
+    logger.error('Error getting notification channels:', { err: error });
     res.status(500).json({ error: 'Failed to get notification channels' });
   }
 });
@@ -496,7 +497,7 @@ router.post('/alerts/channels', (req: Request, res: Response) => {
     const channelId = alertingSystem.addChannel(channelData);
     res.status(201).json({ id: channelId, message: 'Notification channel created successfully' });
   } catch (error) {
-    console.error('Error creating notification channel:', error);
+    logger.error('Error creating notification channel:', { err: error });
     res.status(500).json({ error: 'Failed to create notification channel' });
   }
 });
@@ -527,7 +528,7 @@ router.get('/config', (req: Request, res: Response) => {
 
     res.json(config);
   } catch (error) {
-    console.error('Error getting monitoring config:', error);
+    logger.error('Error getting monitoring config:', { err: error });
     res.status(500).json({ error: 'Failed to get monitoring config' });
   }
 });
@@ -542,7 +543,7 @@ router.put('/config', (req: Request, res: Response) => {
     initializeMonitoring(config);
     res.json({ message: 'Monitoring configuration updated successfully' });
   } catch (error) {
-    console.error('Error updating monitoring config:', error);
+    logger.error('Error updating monitoring config:', { err: error });
     res.status(500).json({ error: 'Failed to update monitoring config' });
   }
 });
@@ -598,7 +599,7 @@ router.get('/export', (req: Request, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(data);
   } catch (error) {
-    console.error('Error exporting monitoring data:', error);
+    logger.error('Error exporting monitoring data:', { err: error });
     res.status(500).json({ error: 'Failed to export monitoring data' });
   }
 });
@@ -628,7 +629,7 @@ router.get('/health', (req: Request, res: Response) => {
 
     res.json(health);
   } catch (error) {
-    console.error('Error in health check:', error);
+    logger.error('Error in health check:', { err: error });
     res.status(500).json({ status: 'unhealthy', error: 'Health check failed' });
   }
 });

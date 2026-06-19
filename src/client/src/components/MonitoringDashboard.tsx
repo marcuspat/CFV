@@ -283,7 +283,7 @@ const MonitoringDashboard: React.FC = () => {
                 />
                 <YAxis />
                 <Tooltip
-                  labelFormatter={(value) => new Date(value).toLocaleString()}
+                  labelFormatter={(value: any) => new Date(value).toLocaleString()}
                 />
                 <Legend />
                 <Line
@@ -315,7 +315,7 @@ const MonitoringDashboard: React.FC = () => {
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
-                    label={({ name, value }) => `${name}: ${value.toFixed(1)}%`}
+                    label={({ name, value }: { name: string; value: number }) => `${name}: ${value.toFixed(1)}%`}
                   >
                     <Cell fill="#3b82f6" />
                     <Cell fill="#10b981" />

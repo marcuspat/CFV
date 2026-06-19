@@ -6,7 +6,8 @@
 import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import fs from 'fs/promises';
 import path from 'path';
-import { App } from '../../src/server/app';
+import request from 'supertest';
+import App from '../../src/server/app.js';
 
 describe('File System Error Tests', () => {
   let app: App;
@@ -84,7 +85,7 @@ describe('File System Error Tests', () => {
     test('should handle file uploads to non-existent directories', async () => {
       const nonExistentPath = path.join('/tmp', 'non-existent-dir-' + Date.now(), 'test.txt');
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/upload')
         .attach('file', Buffer.from('test content'), 'test.txt')
         .field('path', nonExistentPath);
@@ -100,7 +101,7 @@ describe('File System Error Tests', () => {
         const availableSpace = stats.bavail * stats.bsize;
 
         if (availableSpace < 100 * 1024 * 1024) { // Less than 100MB
-          const response = await request(app.getExpressApp())
+          const response = await request(app.app)
             .post('/api/upload')
             .attach('file', Buffer.from('A'.repeat(50 * 1024 * 1024)), 'large-file.txt'); // 50MB
 
@@ -116,7 +117,7 @@ describe('File System Error Tests', () => {
       // Try to write to a protected directory
       const protectedPath = '/root/protected-test.txt';
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/upload')
         .attach('file', Buffer.from('test content'), 'protected-test.txt')
         .field('path', protectedPath);
@@ -127,7 +128,7 @@ describe('File System Error Tests', () => {
 
     test('should handle simultaneous file uploads', async () => {
       const uploadPromises = Array(10).fill(null).map((_, index) =>
-        request(app.getExpressApp())
+        request(app.app)
           .post('/api/upload')
           .attach('file', Buffer.from(`Content ${index}`), `file-${index}.txt`)
       );
@@ -156,7 +157,7 @@ describe('File System Error Tests', () => {
       ];
 
       for (const buffer of corruptedBuffers) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/upload')
           .attach('file', buffer, 'corrupted.bin');
 
@@ -167,7 +168,7 @@ describe('File System Error Tests', () => {
 
   describe('File Reading Scenarios', () => {
     test('should handle reading non-existent files', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/files/non-existent-file.txt');
 
       expect([404, 400, 500]).toContain(response.status);
@@ -185,7 +186,7 @@ describe('File System Error Tests', () => {
         console.log('Could not change file permissions (likely not root):', error);
       }
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get(`/api/files?path=${encodeURIComponent(restrictedFile)}`);
 
       expect([403, 404, 500]).toContain(response.status);
@@ -199,7 +200,7 @@ describe('File System Error Tests', () => {
     });
 
     test('should handle reading very large files', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get(`/api/files?path=${encodeURIComponent(testFiles.large)}`);
 
       expect([200, 413, 500]).toContain(response.status);
@@ -210,7 +211,7 @@ describe('File System Error Tests', () => {
     });
 
     test('should handle reading files with special characters in names', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get(`/api/files?path=${encodeURIComponent(testFiles.specialChars)}`);
 
       expect([200, 400, 404]).toContain(response.status);
@@ -218,7 +219,7 @@ describe('File System Error Tests', () => {
 
     test('should handle concurrent file reading', async () => {
       const readPromises = Array(20).fill(null).map(() =>
-        request(app.getExpressApp())
+        request(app.app)
           .get(`/api/files?path=${encodeURIComponent(testFiles.valid)}`)
       );
 
@@ -235,7 +236,7 @@ describe('File System Error Tests', () => {
 
   describe('File Deletion Scenarios', () => {
     test('should handle deleting non-existent files', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .delete('/api/files/non-existent-file.txt');
 
       expect([404, 400, 500]).toContain(response.status);
@@ -243,7 +244,7 @@ describe('File System Error Tests', () => {
 
     test('should handle deleting files without permissions', async () => {
       // Try to delete a system file (this should fail)
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .delete('/api/files/etc/passwd');
 
       expect([403, 404, 500]).toContain(response.status);
@@ -262,7 +263,7 @@ describe('File System Error Tests', () => {
         console.log('Could not open file handle:', error);
       }
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .delete(`/api/files?path=${encodeURIComponent(inUseFile)}`);
 
       if (fileHandle) {
@@ -277,7 +278,7 @@ describe('File System Error Tests', () => {
       await fs.mkdir(testSubDir, { recursive: true });
       await fs.writeFile(path.join(testSubDir, 'file.txt'), 'content');
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .delete(`/api/files?path=${encodeURIComponent(testSubDir)}`);
 
       expect([200, 409, 500]).toContain(response.status);
@@ -294,7 +295,7 @@ describe('File System Error Tests', () => {
       ];
 
       for (const invalidPath of invalidPaths) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .post('/api/directories')
           .send({ path: invalidPath });
 
@@ -311,7 +312,7 @@ describe('File System Error Tests', () => {
         await fs.writeFile(path.join(manyFilesDir, `file-${i}.txt`), `content ${i}`);
       }
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get(`/api/directories?path=${encodeURIComponent(manyFilesDir)}`);
 
       expect([200, 413, 500]).toContain(response.status);
@@ -333,7 +334,7 @@ describe('File System Error Tests', () => {
       ];
 
       for (const traversal of traversalAttempts) {
-        const response = await request(app.getExpressApp())
+        const response = await request(app.app)
           .get(`/api/directories?path=${encodeURIComponent(traversal)}`);
 
         expect([400, 403, 404]).toContain(response.status);
@@ -352,7 +353,7 @@ describe('File System Error Tests', () => {
         console.log('Could not create symlink (might not be supported):', error);
       }
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get(`/api/files?path=${encodeURIComponent(linkFile)}`);
 
       expect([200, 400, 404]).toContain(response.status);
@@ -399,7 +400,7 @@ describe('File System Error Tests', () => {
         console.log('Could not corrupt file:', error);
       }
 
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get(`/api/files?path=${encodeURIComponent(corruptibleFile)}`);
 
       expect([200, 400, 500]).toContain(response.status);
@@ -410,7 +411,7 @@ describe('File System Error Tests', () => {
       await fs.writeFile(sharedFile, 'initial content');
 
       const operations = Array(10).fill(null).map((_, index) =>
-        request(app.getExpressApp())
+        request(app.app)
           .post('/api/files/write')
           .send({
             path: sharedFile,
@@ -429,7 +430,7 @@ describe('File System Error Tests', () => {
 
   describe('File System Monitoring', () => {
     test('should monitor disk space usage', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/system/disk-usage');
 
       expect(response.status).toBe(200);
@@ -445,7 +446,7 @@ describe('File System Error Tests', () => {
     });
 
     test('should detect disk space warnings', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .get('/api/system/disk-usage');
 
       if (response.body.usagePercentage > 90) {
@@ -458,7 +459,7 @@ describe('File System Error Tests', () => {
     });
 
     test('should handle file system watcher errors', async () => {
-      const response = await request(app.getExpressApp())
+      const response = await request(app.app)
         .post('/api/files/watch')
         .send({
           path: testDir,
@@ -471,7 +472,7 @@ describe('File System Error Tests', () => {
         expect(response.body).toHaveProperty('watcherId');
 
         // Test stopping the watcher
-        const stopResponse = await request(app.getExpressApp())
+        const stopResponse = await request(app.app)
           .delete(`/api/files/watch/${response.body.watcherId}`);
 
         expect([200, 404]).toContain(stopResponse.status);

@@ -1,8 +1,16 @@
 /**
- * Logging utility for Cognitive Fabric Visualizer
+ * Logging utility for Cognitive Fabric Visualizer — backed by pino.
+ *
+ * Reads LOG_LEVEL directly from the environment (default 'info') so it has no
+ * dependency on the strict config module and can be used from the earliest
+ * boot path. The public API (logger.info/warn/error/debug + the specialized
+ * helpers) is preserved so existing call sites are unchanged. `pinoLogger` is
+ * exported for pino-http.
  */
+import dotenv from 'dotenv';
+import pino, { Logger as PinoLogger } from 'pino';
 
-import { config } from '../config';
+dotenv.config();
 
 export enum LogLevel {
   ERROR = 'error',
@@ -15,171 +23,73 @@ export interface LogEntry {
   level: LogLevel;
   message: string;
   timestamp: Date;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   error?: Error;
   requestId?: string;
   userId?: string;
   conversationId?: string;
 }
 
+const VALID_LEVELS = ['error', 'warn', 'info', 'debug'];
+const level = VALID_LEVELS.includes(process.env.LOG_LEVEL ?? '')
+  ? (process.env.LOG_LEVEL as string)
+  : 'info';
+
+// Shared pino instance (also consumed by pino-http for request logging).
+// Synchronous destination so logs flush reliably, incl. fatal messages emitted
+// right before process.exit() in the startup validator.
+export const pinoLogger: PinoLogger = pino(
+  {
+    level,
+    timestamp: pino.stdTimeFunctions.isoTime,
+    formatters: {
+      level: (label) => ({ level: label }),
+    },
+  },
+  pino.destination({ sync: true })
+);
+
+type Meta = Record<string, unknown> | undefined;
+
 class Logger {
-  private logLevel: LogLevel;
+  private base: PinoLogger = pinoLogger;
 
-  constructor() {
-    this.logLevel = this.parseLogLevel(config.LOG_LEVEL);
+  error(message: string, metadata?: Meta, error?: Error): void {
+    this.base.error({ ...(metadata ?? {}), ...(error ? { err: error } : {}) }, message);
   }
 
-  private parseLogLevel(level: string): LogLevel {
-    switch (level) {
-      case 'error':
-        return LogLevel.ERROR;
-      case 'warn':
-        return LogLevel.WARN;
-      case 'info':
-        return LogLevel.INFO;
-      case 'debug':
-        return LogLevel.DEBUG;
-      default:
-        return LogLevel.INFO;
-    }
+  warn(message: string, metadata?: Meta): void {
+    this.base.warn(metadata ?? {}, message);
   }
 
-  private shouldLog(level: LogLevel): boolean {
-    const levels = [LogLevel.ERROR, LogLevel.WARN, LogLevel.INFO, LogLevel.DEBUG];
-    const currentLevelIndex = levels.indexOf(this.logLevel);
-    const messageLevelIndex = levels.indexOf(level);
-    return messageLevelIndex <= currentLevelIndex;
+  info(message: string, metadata?: Meta): void {
+    this.base.info(metadata ?? {}, message);
   }
 
-  private formatMessage(entry: LogEntry): string {
-    const timestamp = entry.timestamp.toISOString();
-    const requestId = entry.requestId ? ` [${entry.requestId}]` : '';
-    const userId = entry.userId ? ` [user:${entry.userId}]` : '';
-    const conversationId = entry.conversationId ? ` [conv:${entry.conversationId}]` : '';
-
-    let message = `${timestamp} ${entry.level.toUpperCase()}${requestId}${userId}${conversationId} - ${entry.message}`;
-
-    if (entry.metadata && Object.keys(entry.metadata).length > 0) {
-      message += ` | Metadata: ${JSON.stringify(entry.metadata)}`;
-    }
-
-    if (entry.error) {
-      message += ` | Error: ${entry.error.message}`;
-      if (entry.error.stack) {
-        message += ` | Stack: ${entry.error.stack}`;
-      }
-    }
-
-    return message;
+  debug(message: string, metadata?: Meta): void {
+    this.base.debug(metadata ?? {}, message);
   }
 
-  private writeLog(entry: LogEntry): void {
-    if (!this.shouldLog(entry.level)) {
-      return;
-    }
-
-    const formattedMessage = this.formatMessage(entry);
-
-    // Console output
-    switch (entry.level) {
-      case LogLevel.ERROR:
-        console.error(formattedMessage);
-        break;
-      case LogLevel.WARN:
-        console.warn(formattedMessage);
-        break;
-      case LogLevel.INFO:
-        console.log(formattedMessage);
-        break;
-      case LogLevel.DEBUG:
-        console.debug(formattedMessage);
-        break;
-    }
-
-    // In production, consider implementing external logging service integration
-    // Examples: Winston, Papertrail, LogDNA, etc.
-    // This is a placeholder for future production logging enhancements
+  // --- Specialized helpers (preserved API; delegate to the levels above) ---
+  logRequest(requestId: string, method: string, url: string, metadata?: Meta): void {
+    this.info('HTTP Request', { ...metadata, method, url, requestId });
   }
 
-  public error(message: string, metadata?: any, error?: Error): void {
-    this.writeLog({
-      level: LogLevel.ERROR,
-      message,
-      timestamp: new Date(),
-      metadata,
-      error,
-    });
+  logCognitiveProcessing(conversationId: string, dimension: string, accuracy: number, target: number): void {
+    const meta = { conversationId, dimension, accuracy, target, thresholdMet: accuracy >= target };
+    if (accuracy >= target) this.info('Cognitive processing completed', meta);
+    else this.warn('Cognitive processing completed', meta);
   }
 
-  public warn(message: string, metadata?: any): void {
-    this.writeLog({
-      level: LogLevel.WARN,
-      message,
-      timestamp: new Date(),
-      metadata,
-    });
+  logWebSocketConnection(clientId: string, userId?: string): void {
+    this.info('WebSocket connection established', { clientId, userId });
   }
 
-  public info(message: string, metadata?: any): void {
-    this.writeLog({
-      level: LogLevel.INFO,
-      message,
-      timestamp: new Date(),
-      metadata,
-    });
+  logWebSocketDisconnection(clientId: string, reason?: string): void {
+    this.info('WebSocket connection closed', { clientId, reason });
   }
 
-  public debug(message: string, metadata?: any): void {
-    this.writeLog({
-      level: LogLevel.DEBUG,
-      message,
-      timestamp: new Date(),
-      metadata,
-    });
-  }
-
-  // Specialized logging methods for different contexts
-  public logRequest(requestId: string, method: string, url: string, metadata?: any): void {
-    this.info('HTTP Request', {
-      ...metadata,
-      method,
-      url,
-      requestId,
-    });
-  }
-
-  public logCognitiveProcessing(conversationId: string, dimension: string, accuracy: number, target: number): void {
-    const logLevel = accuracy >= target ? LogLevel.INFO : LogLevel.WARN;
-    this.writeLog({
-      level: logLevel,
-      message: `Cognitive processing completed`,
-      timestamp: new Date(),
-      metadata: {
-        conversationId,
-        dimension,
-        accuracy,
-        target,
-        thresholdMet: accuracy >= target,
-      },
-      conversationId,
-    });
-  }
-
-  public logWebSocketConnection(clientId: string, userId?: string): void {
-    this.info('WebSocket connection established', {
-      clientId,
-      userId,
-    });
-  }
-
-  public logWebSocketDisconnection(clientId: string, reason?: string): void {
-    this.info('WebSocket connection closed', {
-      clientId,
-      reason,
-    });
-  }
-
-  public logDatabaseQuery(query: string, duration: number, metadata?: any): void {
+  logDatabaseQuery(query: string, duration: number, metadata?: Meta): void {
     this.debug('Database query executed', {
       query: query.substring(0, 200) + (query.length > 200 ? '...' : ''),
       duration: `${duration}ms`,
@@ -187,38 +97,23 @@ class Logger {
     });
   }
 
-  public logCacheOperation(operation: 'hit' | 'miss' | 'set' | 'delete', key: string, metadata?: any): void {
-    this.debug('Cache operation', {
-      operation,
-      key,
-      ...metadata,
-    });
+  logCacheOperation(operation: 'hit' | 'miss' | 'set' | 'delete', key: string, metadata?: Meta): void {
+    this.debug('Cache operation', { operation, key, ...metadata });
   }
 
-  public logPerformanceMetric(metric: string, value: number, unit: string, metadata?: any): void {
-    this.info('Performance metric', {
-      metric,
-      value,
-      unit,
-      ...metadata,
-    });
+  logPerformanceMetric(metric: string, value: number, unit: string, metadata?: Meta): void {
+    this.info('Performance metric', { metric, value, unit, ...metadata });
   }
 
-  // Context-aware logging with request information
-  public createRequestLogger(requestId: string, userId?: string, conversationId?: string) {
+  // Context-aware logging with request information.
+  createRequestLogger(requestId: string, userId?: string, conversationId?: string) {
+    const ctx = { requestId, userId, conversationId };
     return {
-      error: (message: string, metadata?: any, error?: Error) => {
-        this.error(message, { ...metadata, requestId, userId, conversationId }, error);
-      },
-      warn: (message: string, metadata?: any) => {
-        this.warn(message, { ...metadata, requestId, userId, conversationId });
-      },
-      info: (message: string, metadata?: any) => {
-        this.info(message, { ...metadata, requestId, userId, conversationId });
-      },
-      debug: (message: string, metadata?: any) => {
-        this.debug(message, { ...metadata, requestId, userId, conversationId });
-      },
+      error: (message: string, metadata?: Meta, error?: Error) =>
+        this.error(message, { ...metadata, ...ctx }, error),
+      warn: (message: string, metadata?: Meta) => this.warn(message, { ...metadata, ...ctx }),
+      info: (message: string, metadata?: Meta) => this.info(message, { ...metadata, ...ctx }),
+      debug: (message: string, metadata?: Meta) => this.debug(message, { ...metadata, ...ctx }),
     };
   }
 }
@@ -227,20 +122,10 @@ class Logger {
 export const logger = new Logger();
 
 // Export convenience functions
-export const logError = (message: string, metadata?: any, error?: Error): void => {
+export const logError = (message: string, metadata?: Meta, error?: Error): void =>
   logger.error(message, metadata, error);
-};
-
-export const logWarn = (message: string, metadata?: any): void => {
-  logger.warn(message, metadata);
-};
-
-export const logInfo = (message: string, metadata?: any): void => {
-  logger.info(message, metadata);
-};
-
-export const logDebug = (message: string, metadata?: any): void => {
-  logger.debug(message, metadata);
-};
+export const logWarn = (message: string, metadata?: Meta): void => logger.warn(message, metadata);
+export const logInfo = (message: string, metadata?: Meta): void => logger.info(message, metadata);
+export const logDebug = (message: string, metadata?: Meta): void => logger.debug(message, metadata);
 
 export default logger;

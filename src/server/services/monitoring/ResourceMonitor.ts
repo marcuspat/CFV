@@ -11,6 +11,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { metricsCollector } from './MetricsCollector.js';
 import { DEFAULT_MONITORING_CONFIG } from '../../../config/monitoring.js';
+import { logger } from '../../utils/logger';
 
 const execAsync = promisify(exec);
 
@@ -222,10 +223,8 @@ export class ResourceMonitor extends EventEmitter {
 
     const calculateTrend = (oldValue: number, newValue: number) => {
       const change = ((newValue - oldValue) / oldValue) * 100;
-      return {
-        trend: Math.abs(change) > 5 ? (change > 0 ? 'up' : 'down') : 'stable',
-        change
-      };
+      const trend: 'up' | 'down' | 'stable' = Math.abs(change) > 5 ? (change > 0 ? 'up' : 'down') : 'stable';
+      return { trend, change };
     };
 
     return {
@@ -649,7 +648,7 @@ export class ResourceMonitor extends EventEmitter {
 
         this.emit('metrics', metrics);
       } catch (error) {
-        console.error('Error collecting resource metrics:', error);
+        logger.error('Error collecting resource metrics:', { err: error });
       }
     }, this.config.interval);
   }

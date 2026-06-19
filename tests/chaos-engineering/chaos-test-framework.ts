@@ -5,7 +5,7 @@
 
 import { describe, test, expect, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals';
 import request from 'supertest';
-import { App } from '../../src/server/app';
+import App from '../../src/server/app.js';
 
 interface ChaosTest {
   name: string;
@@ -48,6 +48,10 @@ export class ChaosEngineeringFramework {
       await this.app.stop();
     }
     console.log('🔥 Chaos Engineering Framework cleaned up');
+  }
+
+  getApp(): App {
+    return this.app;
   }
 
   /**
@@ -103,8 +107,8 @@ export class ChaosEngineeringFramework {
       metrics.success = recovered && resilienceResults.every(result => result);
 
     } catch (error) {
-      console.error(`❌ Chaos test failed: ${error.message}`);
-      metrics.errorsDuringTest.push(error);
+      console.error(`❌ Chaos test failed: ${(error as Error).message}`);
+      metrics.errorsDuringTest.push(error as Error);
     } finally {
       this.isRunning = false;
       metrics.endTime = Date.now();
@@ -151,7 +155,7 @@ export class ChaosEngineeringFramework {
    */
   private async checkSystemHealth(): Promise<any> {
     try {
-      const response = await request(this.app.getExpressApp())
+      const response = await request(this.app.app)
         .get('/api/health')
         .timeout(5000);
 
@@ -163,7 +167,7 @@ export class ChaosEngineeringFramework {
     } catch (error) {
       return {
         status: 'unhealthy',
-        error: error.message,
+        error: (error as Error).message,
         timestamp: Date.now()
       };
     }
@@ -178,7 +182,7 @@ export class ChaosEngineeringFramework {
 
     while (Date.now() < endTime && this.isRunning) {
       try {
-        const response = await request(this.app.getExpressApp())
+        const response = await request(this.app.app)
           .get('/api/health')
           .timeout(1000);
 
@@ -193,7 +197,7 @@ export class ChaosEngineeringFramework {
       } catch (error) {
         errors.push({
           type: 'health_check_error',
-          error: error.message,
+          error: (error as Error).message,
           timestamp: Date.now()
         });
       }
@@ -265,7 +269,7 @@ export class ChaosEngineeringFramework {
    */
   private async testDatabaseConnection(): Promise<boolean> {
     try {
-      const response = await request(this.app.getExpressApp())
+      const response = await request(this.app.app)
         .get('/api/health/database')
         .timeout(3000);
 
@@ -281,7 +285,7 @@ export class ChaosEngineeringFramework {
   private async testAPIResponsiveness(): Promise<boolean> {
     try {
       const startTime = Date.now();
-      const response = await request(this.app.getExpressApp())
+      const response = await request(this.app.app)
         .get('/api/health')
         .timeout(3000);
 
@@ -297,7 +301,7 @@ export class ChaosEngineeringFramework {
    */
   private async testServiceAvailability(): Promise<boolean> {
     try {
-      const response = await request(this.app.getExpressApp())
+      const response = await request(this.app.app)
         .get('/api/health/services')
         .timeout(5000);
 
@@ -441,7 +445,7 @@ export const ChaosScenarios = {
   /**
    * Database connection failure scenario
    */
-  databaseConnectionFailure: (): ChaosTest => ({
+  databaseConnectionFailure: (appInstance: App): ChaosTest => ({
     name: 'Database Connection Failure',
     description: 'Simulates database connection loss and tests recovery mechanisms',
     scenario: async () => {
@@ -450,7 +454,7 @@ export const ChaosScenarios = {
       console.log('💥 Injecting database connection failure...');
 
       // Simulate the failure
-      await request(app.getExpressApp())
+      await request(appInstance.app)
         .post('/api/admin/simulate-db-failure')
         .send({ duration: 10000 });
     },
@@ -458,11 +462,11 @@ export const ChaosScenarios = {
     recoveryTime: 30000,
     resilienceChecks: [
       async () => {
-        const health = await request(app.getExpressApp()).get('/api/health');
+        const health = await request(appInstance.app).get('/api/health');
         return health.status === 200;
       },
       async () => {
-        const dbHealth = await request(app.getExpressApp()).get('/api/health/database');
+        const dbHealth = await request(appInstance.app).get('/api/health/database');
         return dbHealth.status === 200;
       }
     ]
@@ -471,14 +475,14 @@ export const ChaosScenarios = {
   /**
    * High load scenario
    */
-  highLoadStress: (): ChaosTest => ({
+  highLoadStress: (appInstance: App): ChaosTest => ({
     name: 'High Load Stress Test',
     description: 'Applies high concurrent load to test system limits and degradation',
     scenario: async () => {
       console.log('💥 Injecting high load stress...');
 
       const promises = Array(100).fill(null).map(() =>
-        request(app.getExpressApp())
+        request(appInstance.app)
           .get('/api/conversations')
           .timeout(30000)
       );
@@ -489,12 +493,12 @@ export const ChaosScenarios = {
     recoveryTime: 15000,
     resilienceChecks: [
       async () => {
-        const response = await request(app.getExpressApp()).get('/api/health');
+        const response = await request(appInstance.app).get('/api/health');
         return response.status === 200;
       },
       async () => {
         const start = Date.now();
-        await request(app.getExpressApp()).get('/api/health');
+        await request(appInstance.app).get('/api/health');
         return Date.now() - start < 5000;
       }
     ]
@@ -503,13 +507,13 @@ export const ChaosScenarios = {
   /**
    * Memory pressure scenario
    */
-  memoryPressure: (): ChaosTest => ({
+  memoryPressure: (appInstance: App): ChaosTest => ({
     name: 'Memory Pressure Test',
     description: 'Consumes significant memory to test system behavior under memory pressure',
     scenario: async () => {
       console.log('💥 Injecting memory pressure...');
 
-      const response = await request(app.getExpressApp())
+      await request(appInstance.app)
         .post('/api/admin/memory-stress')
         .send({ sizeMB: 500, duration: 10000 });
     },
@@ -517,7 +521,7 @@ export const ChaosScenarios = {
     recoveryTime: 20000,
     resilienceChecks: [
       async () => {
-        const health = await request(app.getExpressApp()).get('/api/health');
+        const health = await request(appInstance.app).get('/api/health');
         return health.status === 200;
       }
     ]
@@ -526,13 +530,13 @@ export const ChaosScenarios = {
   /**
    * Network partition scenario
    */
-  networkPartition: (): ChaosTest => ({
+  networkPartition: (appInstance: App): ChaosTest => ({
     name: 'Network Partition Simulation',
     description: 'Simulates network connectivity issues between services',
     scenario: async () => {
       console.log('💥 Injecting network partition...');
 
-      await request(app.getExpressApp())
+      await request(appInstance.app)
         .post('/api/admin/network-partition')
         .send({ services: ['database', 'cache'], duration: 15000 });
     },
@@ -540,7 +544,7 @@ export const ChaosScenarios = {
     recoveryTime: 25000,
     resilienceChecks: [
       async () => {
-        const health = await request(app.getExpressApp()).get('/api/health');
+        const health = await request(appInstance.app).get('/api/health');
         return health.status === 200;
       }
     ]
@@ -549,13 +553,13 @@ export const ChaosScenarios = {
   /**
    * CPU saturation scenario
    */
-  cpuSaturation: (): ChaosTest => ({
+  cpuSaturation: (appInstance: App): ChaosTest => ({
     name: 'CPU Saturation Test',
     description: 'Consumes CPU resources to test system under CPU pressure',
     scenario: async () => {
       console.log('💥 Injecting CPU saturation...');
 
-      await request(app.getExpressApp())
+      await request(appInstance.app)
         .post('/api/admin/cpu-stress')
         .send({ cores: 4, duration: 10000 });
     },
@@ -564,7 +568,7 @@ export const ChaosScenarios = {
     resilienceChecks: [
       async () => {
         const start = Date.now();
-        const response = await request(app.getExpressApp()).get('/api/health');
+        const response = await request(appInstance.app).get('/api/health');
         return response.status === 200 && (Date.now() - start) < 10000;
       }
     ]

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feat/production-hardening]
+
+jobs:
+  lint-typecheck-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cfv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      PORT: 3000
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: cfv_test
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ci-test-secret-at-least-32-characters-long
+      JWT_EXPIRES_IN: 24h
+      VERIFICATION_THRESHOLD: 0.95
+      MAX_CONCURRENT_CONNECTIONS: 100
+      MAX_CONCURRENT_ANALYSES: 10
+      REDIS_TTL: 3600
+      MAX_FILE_SIZE: 52428800
+      COGNITIVE_PROCESSING_TIMEOUT: 30000
+      WEBSOCKET_HEARTBEAT: 30000
+      MONITORING_ENABLED: false
+      MONITORING_INTERVAL: 5000
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX_REQUESTS: 100
+      ANTHROPIC_API_KEY: ci-placeholder
+      OPENAI_API_KEY: ci-placeholder
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=high --omit=dev
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run typecheck
+        run: npm run typecheck
+
+      - name: Run database migrations
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d cfv_test -f migrations/001_analysis_jobs.sql
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Run tests
+        run: npm test
+        env:
+          CI: true

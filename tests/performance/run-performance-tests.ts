@@ -137,7 +137,7 @@ async function main() {
 
   } catch (error) {
     console.error('\n❌ Performance testing failed:', error);
-    console.error('Stack trace:', error.stack);
+    console.error('Stack trace:', (error as Error).stack);
     process.exit(3);
   }
 }
@@ -173,4 +173,5 @@ if (require.main === module) {
   });
 }
 
-export { PerformanceTestRunner, PerformanceTestConfig };
+export { PerformanceTestRunner };
+export type { PerformanceTestConfig };

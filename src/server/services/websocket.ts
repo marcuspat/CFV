@@ -402,7 +402,7 @@ export class WebSocketService {
 }
 
 // Global WebSocket service instance
-let wsService: WebSocketService;
+let wsService: WebSocketService | null = null;
 
 export function setupWebSocket(wsServer: WebSocketServer): void {
   wsService = new WebSocketService(wsServer);
@@ -415,4 +415,4 @@ export function getWebSocketService(): WebSocketService {
   return wsService;
 }
 
-export default wsService || null;
+export default wsService;

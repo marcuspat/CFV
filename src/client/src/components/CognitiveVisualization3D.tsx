@@ -4,10 +4,30 @@
  */
 
 import React, { useRef, useMemo, useEffect, useState, useCallback } from 'react';
-import { Canvas, useFrame, useThree, RootState } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Text, Line, Sphere } from '@react-three/drei';
 import * as THREE from 'three';
 import { CognitiveGraph, CognitiveNode, CognitiveEdge, VisualizationState, PerformanceMetrics } from '../types/cognitive';
+
+/* eslint-disable @typescript-eslint/no-namespace */
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      group: any;
+      mesh: any;
+      meshStandardMaterial: any;
+      meshBasicMaterial: any;
+      ringGeometry: any;
+      sphereGeometry: any;
+      boxGeometry: any;
+      lineGeometry: any;
+      ambientLight: any;
+      directionalLight: any;
+      pointLight: any;
+      gridHelper: any;
+    }
+  }
+}
 
 interface CognitiveVisualization3DProps {
   graph: CognitiveGraph;
@@ -31,7 +51,7 @@ function useForceSimulation(nodes: CognitiveNode[], edges: CognitiveEdge[]) {
     timeStep: 0.016, // 60 FPS
   });
 
-  useFrame((state, delta) => {
+  useFrame((state: any, delta: number) => {
     // Always run the simulation for now
     // if (state.paused) return;
 
@@ -149,7 +169,7 @@ function CognitiveNodeComponent({
     return () => clearInterval(animation);
   }, [isHovered, isSelected]);
 
-  useFrame((state) => {
+  useFrame((state: any) => {
     if (meshRef.current) {
       // Gentle floating animation
       meshRef.current.position.y = node.position.y + Math.sin(state.clock.elapsedTime + node.id.charCodeAt(0)) * 0.1;
@@ -222,7 +242,7 @@ function CognitiveEdgeComponent({
   const lineRef = useRef<any>(null);
   const [offset, setOffset] = useState(0);
 
-  useFrame((state) => {
+  useFrame((state: any) => {
     if (isAnimated && lineRef.current) {
       setOffset((state.clock.elapsedTime * 0.5) % 1);
     }
@@ -251,7 +271,7 @@ function PerformanceMonitor({ onMetrics }: { onMetrics: (metrics: PerformanceMet
   const frameCount = useRef(0);
   const lastTime = useRef(performance.now());
 
-  useFrame((state) => {
+  useFrame((state: any) => {
     frameCount.current++;
     const currentTime = performance.now();
 
@@ -268,7 +288,7 @@ function PerformanceMonitor({ onMetrics }: { onMetrics: (metrics: PerformanceMet
         memoryUsage,
         renderTime: state.clock.getDelta(),
         nodeCount: scene.children.length,
-        edgeCount: scene.children.filter(child => child.type === 'Line').length,
+        edgeCount: scene.children.filter((child: any) => child.type === 'Line').length,
       });
 
       frameCount.current = 0;

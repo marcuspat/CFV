@@ -1,279 +1,277 @@
 /**
- * Authentication routes for Cognitive Fabric Visualizer
+ * Authentication routes for Cognitive Fabric Visualizer.
+ *
+ * Real implementation: bcrypt password hashing, JWT access/refresh tokens, and
+ * a PostgreSQL-backed user store (with in-memory fallback). These endpoints are
+ * mounted publicly (no authMiddleware) except /me, which requires a token.
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { v4 as uuidv4 } from 'uuid';
-import { asyncHandler, ValidationError, AuthenticationError } from '../middleware/errorHandler';
-import { generateTokens, AuthenticatedRequest } from '../middleware/auth';
-import { User, UserRole, AuthRequest, AuthResponse } from '../../types';
+import { config } from '../config';
+import {
+  asyncHandler,
+  ValidationError,
+  AuthenticationError,
+} from '../middleware/errorHandler';
+import { validateBody } from '../middleware/validate';
+import {
+  generateTokens,
+  verifyRefreshToken,
+  verifyAccessToken,
+  extractTokenFromRequest,
+  authMiddleware,
+  AuthenticatedRequest,
+} from '../middleware/auth';
+import { UserRole, AuthResponse } from '../../types';
 import { logger } from '../utils/logger';
-import database from '../config/database';
+import {
+  findByEmail,
+  findById,
+  existsByEmailOrUsername,
+  createUser,
+  updateLastLogin,
+  updateProfile,
+  toPublicUser,
+  defaultPreferences,
+} from '../services/userRepository';
+import {
+  revokeRefreshToken,
+  isRefreshTokenRevoked,
+  revokeAccessToken,
+} from '../services/tokenRevocation';
 
 const router = Router();
 
-// Mock user database - in production this would be in a real database
-const users: User[] = [
-  {
-    id: 'admin-123',
-    email: 'admin@cognitive-fabric.com',
-    username: 'admin',
-    fullName: 'System Administrator',
-    role: UserRole.ADMIN,
-    preferences: {
-      theme: 'dark',
-      language: 'en',
-      defaultVisualizationSettings: {
-        colorScheme: 'cognitive',
-        animationEnabled: true,
-        detailLevel: 'comprehensive',
-      },
-      notifications: {
-        email: true,
-        browser: true,
-        processingComplete: true,
-        errors: true,
-      },
-    },
-    createdAt: new Date(),
-  },
-];
+const SALT_ROUNDS = 12;
+
+// --- Validation schemas ---
+const registerSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(8, 'Password must be at least 8 characters long'),
+  username: z.string().min(1, 'username is required').max(100),
+  fullName: z.string().min(1, 'fullName is required').max(255),
+  // Accepted for forward-compat but ignored — self-registration is always VIEWER.
+  role: z.nativeEnum(UserRole).optional(),
+});
+
+const loginSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+/** Convert a JWT duration string ('7d', '24h', '15m', '30s') to milliseconds. */
+function durationToMs(d: string): number {
+  const match = /^(\d+)\s*([smhd])?$/.exec(d.trim());
+  if (!match) return 0;
+  const n = parseInt(match[1], 10);
+  const unit = match[2] ?? 's';
+  const mult = unit === 'd' ? 86_400_000 : unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : 1_000;
+  return n * mult;
+}
+
+// --- Refresh-token httpOnly cookie ---
+const REFRESH_COOKIE = 'refresh_token';
+const REFRESH_COOKIE_PATH = '/api/auth';
+
+/** Minimal single-cookie reader (avoids a cookie-parser dependency). */
+function readCookie(req: Request, name: string): string | undefined {
+  const header = req.headers.cookie;
+  if (!header) return undefined;
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === name) {
+      return decodeURIComponent(part.slice(idx + 1).trim());
+    }
+  }
+  return undefined;
+}
+
+function setRefreshCookie(res: Response, token: string): void {
+  res.cookie(REFRESH_COOKIE, token, {
+    httpOnly: true,
+    secure: config.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: REFRESH_COOKIE_PATH,
+    maxAge: durationToMs(config.JWT_REFRESH_EXPIRES_IN),
+  });
+}
+
+function clearRefreshCookie(res: Response): void {
+  res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
+}
 
 // Register a new user
-router.post('/register', asyncHandler(async (req: Request, res: Response) => {
-  const { email, password, username, fullName, role = UserRole.VIEWER }: AuthRequest = req.body;
+router.post('/register', validateBody(registerSchema), asyncHandler(async (req: Request, res: Response) => {
+  const { email, password, username, fullName } = req.body as {
+    email: string;
+    password: string;
+    username: string;
+    fullName: string;
+  };
 
-  // Validate input
-  if (!email || !password || !username || !fullName) {
-    throw new ValidationError('All fields are required: email, password, username, fullName');
-  }
-
-  if (password.length < 8) {
-    throw new ValidationError('Password must be at least 8 characters long');
-  }
-
-  if (!email.includes('@') || !email.includes('.')) {
-    throw new ValidationError('Invalid email format');
-  }
-
-  // Check if user already exists
-  const existingUser = users.find(u => u.email === email || u.username === username);
-  if (existingUser) {
+  if (await existsByEmailOrUsername(email, username)) {
     throw new ValidationError('User with this email or username already exists');
   }
 
-  // Hash password
-  const saltRounds = 12;
-  const passwordHash = await bcrypt.hash(password, saltRounds);
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-  // Create new user
-  const newUser: User = {
-    id: uuidv4(),
+  const record = await createUser({
     email,
     username,
     fullName,
-    role,
-    preferences: {
-      theme: 'light',
-      language: 'en',
-      defaultVisualizationSettings: {
-        colorScheme: 'default',
-        animationEnabled: true,
-        detailLevel: 'detailed',
-      },
-      notifications: {
-        email: true,
-        browser: true,
-        processingComplete: true,
-        errors: true,
-      },
-    },
-    createdAt: new Date(),
-  };
-
-  // In production, save to database
-  users.push(newUser);
-
-  logger.info('User registered', {
-    userId: newUser.id,
-    email: newUser.email,
-    username: newUser.username,
-    role: newUser.role,
+    passwordHash,
+    role: UserRole.VIEWER, // never honour a client-supplied privileged role
+    preferences: defaultPreferences(),
   });
 
-  // Generate tokens
-  const tokens = generateTokens({
-    id: newUser.id,
-    email: newUser.email,
-    role: newUser.role,
-  });
+  logger.info('User registered', { userId: record.id, email: record.email, username: record.username });
+
+  const tokens = generateTokens({ id: record.id, email: record.email, role: record.role });
+
+  setRefreshCookie(res, tokens.refreshToken);
 
   const response: AuthResponse = {
-    user: newUser,
+    user: toPublicUser(record),
     token: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    expiresAt: new Date(Date.now() + parseInt(tokens.expiresIn) * 1000),
+    expiresAt: new Date(Date.now() + durationToMs(tokens.expiresIn)),
   };
 
   res.status(201).json(response);
 }));
 
 // Login user
-router.post('/login', asyncHandler(async (req: Request, res: Response) => {
-  const { email, password }: { email: string; password: string } = req.body;
+router.post('/login', validateBody(loginSchema), asyncHandler(async (req: Request, res: Response) => {
+  const { email, password } = req.body as { email: string; password: string };
 
-  // Validate input
-  if (!email || !password) {
-    throw new ValidationError('Email and password are required');
-  }
-
-  // Find user (in production, query database with password hash)
-  const user = users.find(u => u.email === email);
-  if (!user) {
+  const record = await findByEmail(email);
+  if (!record) {
     throw new AuthenticationError('Invalid email or password');
   }
 
-  // In production, verify password hash
-  // const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-  // if (!isValidPassword) {
-  //   throw new AuthenticationError('Invalid email or password');
-  // }
-
-  // For demo, accept any password
-  if (password.length < 1) {
+  const isValid = await bcrypt.compare(password, record.passwordHash);
+  if (!isValid) {
     throw new AuthenticationError('Invalid email or password');
   }
 
-  // Update last login
-  user.lastLoginAt = new Date();
+  await updateLastLogin(record.id);
 
-  logger.info('User logged in', {
-    userId: user.id,
-    email: user.email,
-    role: user.role,
-  });
+  logger.info('User logged in', { userId: record.id, email: record.email, role: record.role });
 
-  // Generate tokens
-  const tokens = generateTokens({
-    id: user.id,
-    email: user.email,
-    role: user.role,
-  });
+  const tokens = generateTokens({ id: record.id, email: record.email, role: record.role });
+
+  setRefreshCookie(res, tokens.refreshToken);
 
   const response: AuthResponse = {
-    user,
+    user: toPublicUser({ ...record, lastLoginAt: new Date() }),
     token: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    expiresAt: new Date(Date.now() + parseInt(tokens.expiresIn) * 1000),
+    expiresAt: new Date(Date.now() + durationToMs(tokens.expiresIn)),
   };
 
   res.json(response);
 }));
 
-// Refresh access token
+// Refresh access token (rotates both tokens). The refresh token is read from
+// the httpOnly cookie, falling back to the request body for non-browser clients.
 router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
-  const { refreshToken }: { refreshToken: string } = req.body;
-
+  const refreshToken =
+    readCookie(req, REFRESH_COOKIE) ?? (req.body?.refreshToken as string | undefined);
   if (!refreshToken) {
-    throw new ValidationError('Refresh token is required');
+    throw new AuthenticationError('Refresh token is required');
   }
 
+  let userId: string;
+  let jti: string | undefined;
   try {
-    // Verify refresh token and generate new access token
-    const newAccessToken = jwt.verify(refreshToken, process.env.JWT_SECRET!);
+    ({ userId, jti } = verifyRefreshToken(refreshToken));
+  } catch {
+    throw new AuthenticationError('Invalid or expired refresh token');
+  }
 
-    // In production, fetch user from database
-    const user = users.find(u => u.id === (newAccessToken as any).userId);
-    if (!user) {
-      throw new AuthenticationError('Invalid refresh token');
-    }
+  if (jti && (await isRefreshTokenRevoked(jti))) {
+    throw new AuthenticationError('Refresh token has been revoked');
+  }
 
-    const tokens = generateTokens({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    res.json({
-      token: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresAt: new Date(Date.now() + parseInt(tokens.expiresIn) * 1000),
-    });
-  } catch (error) {
+  const record = await findById(userId);
+  if (!record) {
     throw new AuthenticationError('Invalid refresh token');
   }
+
+  const tokens = generateTokens({ id: record.id, email: record.email, role: record.role });
+
+  setRefreshCookie(res, tokens.refreshToken);
+
+  res.json({
+    token: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresAt: new Date(Date.now() + durationToMs(tokens.expiresIn)),
+  });
 }));
 
-// Logout user
+// Logout — revokes both the refresh token (cookie/body) and the access token
+// (Authorization header) so neither can be reused, then clears the cookie.
 router.post('/logout', asyncHandler(async (req: Request, res: Response) => {
-  const { refreshToken }: { refreshToken?: string } = req.body;
+  const refreshToken =
+    readCookie(req, REFRESH_COOKIE) ?? ((req.body ?? {}) as { refreshToken?: string }).refreshToken;
 
-  // In production, invalidate refresh token in database
-  // For now, just return success
-
-  logger.info('User logged out', {
-    userId: (req as AuthenticatedRequest).user?.id,
-  });
-
-  res.json({
-    message: 'Logged out successfully',
-  });
-}));
-
-// Get current user profile
-router.get('/me', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user;
-
-  if (!user) {
-    throw new AuthenticationError('User not authenticated');
+  if (refreshToken) {
+    try {
+      const { jti, exp } = verifyRefreshToken(refreshToken);
+      if (jti) {
+        // Keep the blocklist entry only until the token would have expired.
+        const ttlSeconds = exp ? Math.max(1, exp - Math.floor(Date.now() / 1000)) : 60;
+        await revokeRefreshToken(jti, ttlSeconds);
+      }
+    } catch {
+      // Invalid/expired token — nothing to revoke; logout is best-effort.
+    }
   }
 
-  // In production, fetch full user profile from database
-  const fullUser = users.find(u => u.id === user.id) || user;
-
-  res.json({
-    user: fullUser,
-  });
-}));
-
-// Update user profile
-router.put('/me', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.user;
-  const updates = req.body;
-
-  if (!user) {
-    throw new AuthenticationError('User not authenticated');
+  // Blocklist the presented access token's jti for the access-token lifetime.
+  const accessToken = extractTokenFromRequest(req);
+  if (accessToken) {
+    try {
+      const decoded = verifyAccessToken(accessToken);
+      if (decoded.jti) {
+        const accessTtl = Math.max(1, Math.ceil(durationToMs(config.JWT_EXPIRES_IN) / 1000));
+        await revokeAccessToken(decoded.jti, accessTtl);
+      }
+    } catch {
+      // Invalid/expired access token — nothing to revoke.
+    }
   }
 
-  // Find user in database
-  const userIndex = users.findIndex(u => u.id === user.id);
-  if (userIndex === -1) {
+  clearRefreshCookie(res);
+  logger.info('User logged out', { userId: (req as AuthenticatedRequest).user?.id });
+  res.json({ message: 'Logged out successfully' });
+}));
+
+// Get current user profile (requires a valid access token)
+router.get('/me', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const record = await findById(userId);
+  if (!record) {
+    throw new AuthenticationError('User not found');
+  }
+  res.json({ user: toPublicUser(record) });
+}));
+
+// Update current user profile (requires a valid access token)
+router.put('/me', authMiddleware, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  const { fullName, preferences } = req.body ?? {};
+
+  const updated = await updateProfile(userId, { fullName, preferences });
+  if (!updated) {
     throw new ValidationError('User not found');
   }
 
-  // Update allowed fields
-  const allowedFields = ['fullName', 'preferences'];
-  const filteredUpdates: Partial<User> = {};
-
-  for (const field of allowedFields) {
-    if (updates[field] !== undefined) {
-      filteredUpdates[field] = updates[field];
-    }
-  }
-
-  // Update user
-  users[userIndex] = { ...users[userIndex], ...filteredUpdates };
-
-  logger.info('User profile updated', {
-    userId: user.id,
-    updatedFields: Object.keys(filteredUpdates),
-  });
-
-  res.json({
-    user: users[userIndex],
-  });
+  logger.info('User profile updated', { userId });
+  res.json({ user: toPublicUser(updated) });
 }));
 
 export default router;
